@@ -139,6 +139,15 @@ add_action('admin_menu', function() {
         'scf_inquiry_settings',
         'scf_admin_inquiry_settings_page'
     );
+    // 詳細ページ（一覧からの遷移先）
+    add_submenu_page(
+        'scf_inquiry_list',
+        'お問い合わせ詳細',
+        'お問い合わせ詳細',
+        'manage_options',
+        'scf_inquiry_view',
+        'scf_admin_inquiry_view_page'
+    );
 });
 
 function scf_admin_inquiry_settings_page() {
@@ -180,15 +189,16 @@ function scf_admin_inquiry_list_page() {
         return;
     }
     echo '<table class="widefat fixed striped"><thead><tr>';
-    echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容</th><th>添付</th></tr></thead><tbody>';
+    echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容（抜粋）</th><th>添付</th></tr></thead><tbody>';
     foreach ($rows as $r) {
         echo '<tr>';
         echo '<td>' . esc_html($r->created) . '</td>';
-        echo '<td>' . esc_html($r->inquiry_no) . '</td>';
+        $view_url = admin_url('admin.php?page=scf_inquiry_view&inquiry_id=' . intval($r->id));
+        echo '<td><a href="' . esc_url($view_url) . '">' . esc_html($r->inquiry_no) . '</a></td>';
         echo '<td>' . esc_html($r->name) . '</td>';
         echo '<td><a href="mailto:' . esc_attr($r->email) . '">' . esc_html($r->email) . '</a></td>';
         echo '<td>' . esc_html($r->inquiry) . '</td>';
-        echo '<td>' . nl2br(esc_html(mb_strimwidth($r->content,0,60,'...'))) . '</td>';
+        echo '<td>' . nl2br(esc_html(mb_strimwidth($r->content,0,120,'...'))) . '</td>';
         // 添付
         $files = $r->files ? maybe_unserialize($r->files) : [];
         echo '<td>';
@@ -205,6 +215,57 @@ function scf_admin_inquiry_list_page() {
         echo '</tr>';
     }
     echo '</tbody></table></div>';
+}
+
+function scf_admin_inquiry_view_page() {
+    if ( empty($_GET['inquiry_id']) ) {
+        echo '<div class="wrap"><p>無効な問い合わせIDです。</p></div>';
+        return;
+    }
+    $id = intval($_GET['inquiry_id']);
+    global $wpdb;
+    $table = $wpdb->prefix . 'scf_inquiries';
+    $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
+    if ( ! $row ) {
+        echo '<div class="wrap"><p>該当するお問い合わせが見つかりません。</p></div>';
+        return;
+    }
+    echo '<div class="wrap">';
+    echo '<h1>お問い合わせ詳細 — ' . esc_html($row->inquiry_no) . '</h1>';
+    echo '<p><a href="' . esc_url(admin_url('admin.php?page=scf_inquiry_list')) . '">&laquo; 一覧に戻る</a></p>';
+    echo '<table class="form-table">';
+    $fields = [
+        '日時' => $row->created,
+        '番号' => $row->inquiry_no,
+        'お名前' => $row->name,
+        'メール' => '<a href="mailto:' . esc_attr($row->email) . '">' . esc_html($row->email) . '</a>',
+        '郵便番号' => $row->zip,
+        '住所' => $row->address,
+        '電話番号' => $row->tel,
+        '種別' => $row->inquiry,
+        '商品名' => $row->product,
+        'お買い上げ日' => $row->date,
+        'ご購入店舗' => $row->shop,
+        '内容' => nl2br(esc_html($row->content)),
+    ];
+    foreach ($fields as $k => $v) {
+        echo '<tr><th style="width:18%;text-align:left;">' . esc_html($k) . '</th><td>' . $v . '</td></tr>';
+    }
+    echo '</table>';
+    // attachments
+    $files = $row->files ? maybe_unserialize($row->files) : [];
+    if ($files && is_array($files)) {
+        echo '<h2>添付ファイル</h2><div>';
+        foreach ($files as $f) {
+            if (strpos($f['mime'], 'image/') === 0) {
+                echo '<a href="' . esc_url($f['url']) . '" target="_blank"><img src="' . esc_url($f['thumb']) . '" style="max-width:200px;margin:6px;border:1px solid #ddd;padding:4px;background:#fff;"></a>';
+            } else {
+                echo '<p><a href="' . esc_url($f['url']) . '" target="_blank">' . esc_html($f['name']) . '</a></p>';
+            }
+        }
+        echo '</div>';
+    }
+    echo '</div>';
 }
 // ファイル保持期間に応じて添付ファイルを自動削除
 add_action('scf_delete_old_attachments', function() {
