@@ -51,7 +51,7 @@
     padding: .5rem 1rem;
     transition: all .3s;
     width: 100%;
-    background: #DDDDDD;
+    background: #eaedf2;
 }
 .scf-form textarea {
 	min-height: 100px;
