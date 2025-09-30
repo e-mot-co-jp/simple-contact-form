@@ -44,7 +44,10 @@ function scf_render_form($atts = []) {
         <label>ご購入店舗名<br><input type="text" name="scf_shop"></label><br>
         <div class="scf-file-area">
             <label>ファイル添付（複数可・40MBまで・jpg/jpeg/gif/pdf/heic/png）</label>
-            <div class="scf-dropzone" tabindex="0">ここにファイルをドラッグ＆ドロップ、またはクリックで選択</div>
+            <div class="scf-dropzone" tabindex="0">
+                <span class="scf-drop-pc">ここにファイルをドラッグ＆ドロップ、またはクリックで選択</span>
+                <span class="scf-drop-sp">タップしてファイルを選択</span>
+            </div>
             <input type="file" name="scf_files[]" class="scf-file-input" multiple accept=".jpg,.jpeg,.gif,.pdf,.heic,.png" style="display:none;">
             <div class="scf-file-list"></div>
         </div>
