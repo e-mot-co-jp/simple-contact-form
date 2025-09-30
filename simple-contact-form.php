@@ -451,7 +451,7 @@ add_action('init', function() {
         }
         // 管理者宛メール
     $to = get_option('scf_support_mail', 'support@e-mot.co.jp');
-        $subject = '[お問い合わせ:' . $inquiry_no . '] ' . sanitize_text_field($_POST['scf_inquiry']);
+        $subject = '[お問い合わせ] ' . sanitize_text_field($_POST['scf_inquiry']) . '：' . $inquiry_no;
         $body = "お問い合わせ番号: {$inquiry_no}\n".
                 "お名前: {$_POST['scf_name']}\n".
                 "メール: {$_POST['scf_email']}\n".
