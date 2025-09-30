@@ -3,7 +3,8 @@
 Plugin Name: Simple Contact Form
 Description: ショートコードで設置できるシンプルなお問い合わせフォーム。
 Version: 1.0
-Author: e-mot-co-jp
+Author: Yu Ishiga
+website: https://backcountry-works.com
 */
 
 if (!defined('ABSPATH')) exit;
@@ -22,13 +23,13 @@ function scf_render_form($atts = []) {
     ?>
     <form class="h-adr scf-form" method="post" action="">
         <span class="p-country-name" style="display:none;">Japan</span>
-        <label>*お名前<br><input type="text" name="scf_name" required></label><br>
-        <label>*メールアドレス<br><input type="email" name="scf_email" required></label><br>
-        <label>*メールアドレス確認<br><input type="email" name="scf_email_confirm" required></label><br>
-        <label>*郵便番号<br><input type="text" name="scf_zip" class="p-postal-code" size="8" maxlength="8" required></label><br>
-        <label>*住所<br><input type="text" name="scf_address" class="p-region p-locality p-street-address p-extended-address" required></label><br>
-        <label>*電話番号<br><input type="tel" name="scf_tel" required></label><br>
-        <label>*お問い合わせ内容<br>
+        <label><span class="scf-required">必須</span>お名前<br><input type="text" name="scf_name" required></label><br>
+        <label><span class="scf-required">必須</span>メールアドレス<br><input type="email" name="scf_email" required></label><br>
+        <label><span class="scf-required">必須</span>メールアドレス確認<br><input type="email" name="scf_email_confirm" required></label><br>
+        <label><span class="scf-required">必須</span>郵便番号<br><input type="text" name="scf_zip" class="p-postal-code" size="8" maxlength="8" required></label><br>
+        <label><span class="scf-required">必須</span>住所<br><input type="text" name="scf_address" class="p-region p-locality p-street-address p-extended-address" required></label><br>
+        <label><span class="scf-required">必須</span>電話番号<br><input type="tel" name="scf_tel" required></label><br>
+        <label><span class="scf-required">必須</span>お問い合わせ内容<br>
             <select name="scf_inquiry" required>
                 <option value="">選択してください</option>
                 <option value="保証内容について">保証内容について</option>
@@ -38,10 +39,10 @@ function scf_render_form($atts = []) {
                 <option value="その他">その他</option>
             </select>
         </label><br>
-        <label>*商品名<br><input type="text" name="scf_product" required></label><br>
+        <label><span class="scf-required">必須</span>商品名<br><input type="text" name="scf_product" required></label><br>
         <label>お買い上げ日<br><input type="date" name="scf_date"></label><br>
         <label>ご購入店舗名<br><input type="text" name="scf_shop"></label><br>
-        <label>*内容<br><textarea name="scf_content" required></textarea></label><br>
+        <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
