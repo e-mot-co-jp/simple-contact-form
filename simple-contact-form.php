@@ -90,6 +90,36 @@ register_activation_hook(__FILE__, function() {
     dbDelta($sql);
 });
 
+/**
+ * Ensure the inquiries table exists. Can be called on-demand.
+ */
+function scf_create_table() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'scf_inquiries';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            inquiry_no VARCHAR(32),
+            name VARCHAR(255),
+            email VARCHAR(255),
+            zip VARCHAR(32),
+            address TEXT,
+            tel VARCHAR(64),
+            inquiry VARCHAR(255),
+            product VARCHAR(255),
+            date VARCHAR(32),
+            shop VARCHAR(255),
+            content TEXT,
+            files TEXT,
+            created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+}
+
 // お問い合わせ管理メニュー追加
 add_action('admin_menu', function() {
     add_menu_page(
@@ -137,8 +167,14 @@ function scf_admin_inquiry_settings_page() {
 function scf_admin_inquiry_list_page() {
     global $wpdb;
     $table = $wpdb->prefix . 'scf_inquiries';
+    // attempt to create table if missing
+    scf_create_table();
     $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY created DESC LIMIT 100");
     echo '<div class="wrap"><h1>お問い合わせ管理</h1>';
+    if ($wpdb->get_var("SHOW TABLES LIKE '$table'") != $table) {
+        echo '<div class="notice notice-warning"><p>データベーステーブル ' . esc_html($table) . ' が存在しません。プラグインを再有効化してください。</p></div></div>';
+        return;
+    }
     if (!$rows) {
         echo '<p>まだお問い合わせはありません。</p></div>';
         return;
@@ -292,7 +328,9 @@ add_action('init', function() {
         // お問い合わせ番号生成
         $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
 
-        // DB保存
+    // Ensure table exists before insert
+    scf_create_table();
+    // DB保存
         global $wpdb;
         $table = $wpdb->prefix . 'scf_inquiries';
         $wpdb->insert($table, [
@@ -309,6 +347,13 @@ add_action('init', function() {
             'content' => sanitize_textarea_field($_POST['scf_content']),
             'files' => $uploaded_info ? maybe_serialize($uploaded_info) : '',
         ]);
+        // Diagnostic logging: record insert id and any DB error
+        if ( defined('WP_DEBUG') && WP_DEBUG ) {
+            error_log('[scf] inserted id=' . intval($wpdb->insert_id));
+            if ( $wpdb->last_error ) {
+                error_log('[scf] db error: ' . $wpdb->last_error);
+            }
+        }
         // 管理者宛メール
     $to = get_option('scf_support_mail', 'support@e-mot.co.jp');
         $subject = '[お問い合わせ:' . $inquiry_no . '] ' . sanitize_text_field($_POST['scf_inquiry']);
