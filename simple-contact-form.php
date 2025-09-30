@@ -178,15 +178,35 @@ function scf_admin_inquiry_list_page() {
     $table = $wpdb->prefix . 'scf_inquiries';
     // attempt to create table if missing
     scf_create_table();
-    $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY created DESC LIMIT 100");
     echo '<div class="wrap"><h1>お問い合わせ管理</h1>';
     if ($wpdb->get_var("SHOW TABLES LIKE '$table'") != $table) {
         echo '<div class="notice notice-warning"><p>データベーステーブル ' . esc_html($table) . ' が存在しません。プラグインを再有効化してください。</p></div></div>';
         return;
     }
+    // pagination
+    $per_page = 100;
+    $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+    $total = intval($wpdb->get_var("SELECT COUNT(*) FROM $table"));
+    $total_pages = $total > 0 ? ceil($total / $per_page) : 1;
+    $offset = ($paged - 1) * $per_page;
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table ORDER BY created DESC LIMIT %d OFFSET %d", $per_page, $offset));
     if (!$rows) {
         echo '<p>まだお問い合わせはありません。</p></div>';
         return;
+    }
+    // pagination links (above)
+    if ( $total > $per_page ) {
+        $base_url = admin_url('admin.php?page=scf_inquiry_list');
+        $base = add_query_arg('paged', '%#%', $base_url);
+        echo '<div class="tablenav"><div class="tablenav-pages">' . paginate_links([
+            'base' => $base,
+            'format' => '',
+            'current' => $paged,
+            'total' => $total_pages,
+            'prev_text' => '&laquo;',
+            'next_text' => '&raquo;',
+            'type' => 'list',
+        ]) . '</div></div>';
     }
     echo '<table class="widefat fixed striped"><thead><tr>';
     echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容（抜粋）</th><th>添付</th></tr></thead><tbody>';
@@ -215,6 +235,20 @@ function scf_admin_inquiry_list_page() {
         echo '</tr>';
     }
     echo '</tbody></table></div>';
+    // pagination links (below)
+    if ( $total > $per_page ) {
+        $base_url = admin_url('admin.php?page=scf_inquiry_list');
+        $base = add_query_arg('paged', '%#%', $base_url);
+        echo '<div class="tablenav"><div class="tablenav-pages">' . paginate_links([
+            'base' => $base,
+            'format' => '',
+            'current' => $paged,
+            'total' => $total_pages,
+            'prev_text' => '&laquo;',
+            'next_text' => '&raquo;',
+            'type' => 'list',
+        ]) . '</div></div>';
+    }
 }
 
 function scf_admin_inquiry_view_page() {
