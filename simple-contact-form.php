@@ -1,3 +1,65 @@
+<?php
+/*
+Plugin Name: Simple Contact Form
+Plugin URI: https://example.com/
+Description: シンプルなお問い合わせフォーム（ファイル添付・郵便番号→住所自動入力(yubinbango)対応）
+Version: 1.0.0
+Author: e-mot
+Text Domain: simple-contact-form
+*/
+
+if (!defined('ABSPATH')) exit;
+
+function scf_enqueue_scripts() {
+    // 郵便番号→住所自動入力API（yubinbango.js）
+    wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
+    // 独自バリデーション用
+    wp_enqueue_script('scf-validate', plugins_url('validate.js', __FILE__), ['jquery'], '1.0', true);
+    wp_enqueue_style('scf-style', plugins_url('style.css', __FILE__));
+}
+add_action('wp_enqueue_scripts', 'scf_enqueue_scripts');
+
+function scf_render_form($atts = []) {
+    ob_start();
+    $pdf_icon = plugins_url('pdf-icon.png', __FILE__);
+    echo '<form class="h-adr scf-form" method="post" action="" enctype="multipart/form-data">';
+    echo '<span class="p-country-name" style="display:none;">Japan</span>';
+    echo '<label><span class="scf-required">必須</span>お名前<br><input type="text" name="scf_name" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>メールアドレス<br><input type="email" name="scf_email" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>メールアドレス確認<br><input type="email" name="scf_email_confirm" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>郵便番号<br><input type="text" name="scf_zip" class="p-postal-code" size="8" maxlength="8" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>住所<br><input type="text" name="scf_address" class="p-region p-locality p-street-address p-extended-address" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>電話番号<br><input type="tel" name="scf_tel" required></label><br>';
+    echo '<label><span class="scf-required">必須</span>お問い合わせ内容<br>';
+    echo '<select name="scf_inquiry" required>';
+    echo '<option value="">選択してください</option>';
+    echo '<option value="保証内容について">保証内容について</option>';
+    echo '<option value="オンラインショップについて">オンラインショップについて</option>';
+    echo '<option value="製品の仕様などについて">製品の仕様などについて</option>';
+    echo '<option value="リコールについて">リコールについて</option>';
+    echo '<option value="その他">その他</option>';
+    echo '</select>';
+    echo '</label><br>';
+    echo '<label><span class="scf-required">必須</span>商品名<br><input type="text" name="scf_product" required></label><br>';
+    echo '<label>お買い上げ日<br><input type="date" name="scf_date"></label><br>';
+    echo '<label>ご購入店舗名<br><input type="text" name="scf_shop"></label><br>';
+    echo '<div class="scf-file-area">';
+    echo '<label>ファイル添付（複数可・40MBまで・jpg/jpeg/gif/pdf/heic/png）</label>';
+    echo '<div class="scf-dropzone" tabindex="0">';
+    echo '<span class="scf-drop-pc">ここにファイルをドラッグ＆ドロップ、またはクリックで選択</span>';
+    echo '<span class="scf-drop-sp">タップしてファイルを選択</span>';
+    echo '</div>';
+    echo '<input type="file" name="scf_files[]" class="scf-file-input" multiple accept=".jpg,.jpeg,.gif,.pdf,.heic,.png" style="display:none;">';
+    echo '<div class="scf-file-list"></div>';
+    echo '</div>';
+    echo '<label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>';
+    echo '<button type="submit">送信</button>';
+    echo '</form>';
+    echo '<div class="scf-message"></div>';
+    echo '<script>window.scfFileThumb = window.scfFileThumb || {}; window.scfFileThumb.pdfIcon = ' . json_encode($pdf_icon) . ';</script>';
+    return ob_get_clean();
+}
+add_shortcode('simple_contact_form', 'scf_render_form');
 // お問い合わせデータ保存用テーブル作成
 register_activation_hook(__FILE__, function() {
     global $wpdb;
@@ -23,6 +85,7 @@ register_activation_hook(__FILE__, function() {
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
 });
+
 // お問い合わせ管理メニュー追加
 add_action('admin_menu', function() {
     add_menu_page(
@@ -129,76 +192,10 @@ add_action('scf_delete_old_attachments', function() {
     foreach ($attachments as $att_id) {
         wp_delete_attachment($att_id, true);
     }
-});
-if (!wp_next_scheduled('scf_delete_old_attachments')) {
-    wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
-}
-<?php
-/*
-Plugin Name: Simple Contact Form
-Description: ショートコードで設置できるシンプルなお問い合わせフォーム。
-Version: 1.0
-Author: Yu Ishiga
-website: https://backcountry-works.com
-*/
-
-if (!defined('ABSPATH')) exit;
-
-function scf_enqueue_scripts() {
-    // 郵便番号→住所自動入力API（yubinbango.js）
-    wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
-    // 独自バリデーション用
-    wp_enqueue_script('scf-validate', plugins_url('validate.js', __FILE__), ['jquery'], '1.0', true);
-    wp_enqueue_style('scf-style', plugins_url('style.css', __FILE__));
-}
-add_action('wp_enqueue_scripts', 'scf_enqueue_scripts');
-
-function scf_render_form($atts = []) {
-    ob_start();
-    ?>
-    <form class="h-adr scf-form" method="post" action="" enctype="multipart/form-data">
-        <span class="p-country-name" style="display:none;">Japan</span>
-        <label><span class="scf-required">必須</span>お名前<br><input type="text" name="scf_name" required></label><br>
-        <label><span class="scf-required">必須</span>メールアドレス<br><input type="email" name="scf_email" required></label><br>
-        <label><span class="scf-required">必須</span>メールアドレス確認<br><input type="email" name="scf_email_confirm" required></label><br>
-        <label><span class="scf-required">必須</span>郵便番号<br><input type="text" name="scf_zip" class="p-postal-code" size="8" maxlength="8" required></label><br>
-        <label><span class="scf-required">必須</span>住所<br><input type="text" name="scf_address" class="p-region p-locality p-street-address p-extended-address" required></label><br>
-        <label><span class="scf-required">必須</span>電話番号<br><input type="tel" name="scf_tel" required></label><br>
-        <label><span class="scf-required">必須</span>お問い合わせ内容<br>
-            <select name="scf_inquiry" required>
-                <option value="">選択してください</option>
-                <option value="保証内容について">保証内容について</option>
-                <option value="オンラインショップについて">オンラインショップについて</option>
-                <option value="製品の仕様などについて">製品の仕様などについて</option>
-                <option value="リコールについて">リコールについて</option>
-                <option value="その他">その他</option>
-            </select>
-        </label><br>
-        <label><span class="scf-required">必須</span>商品名<br><input type="text" name="scf_product" required></label><br>
-        <label>お買い上げ日<br><input type="date" name="scf_date"></label><br>
-        <label>ご購入店舗名<br><input type="text" name="scf_shop"></label><br>
-        <div class="scf-file-area">
-            <label>ファイル添付（複数可・40MBまで・jpg/jpeg/gif/pdf/heic/png）</label>
-            <div class="scf-dropzone" tabindex="0">
-                <span class="scf-drop-pc">ここにファイルをドラッグ＆ドロップ、またはクリックで選択</span>
-                <span class="scf-drop-sp">タップしてファイルを選択</span>
-            </div>
-            <input type="file" name="scf_files[]" class="scf-file-input" multiple accept=".jpg,.jpeg,.gif,.pdf,.heic,.png" style="display:none;">
-            <div class="scf-file-list"></div>
-        </div>
-        <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
-        <button type="submit">送信</button>
-    </form>
-    <div class="scf-message"></div>
-    <?php
-    // PDFアイコンのURLをJSグローバル変数で渡す
-    $pdf_icon = plugins_url('pdf-icon.png', __FILE__);
-    ?>
-    <script>window.scfFileThumb = window.scfFileThumb || {}; window.scfFileThumb.pdfIcon = <?php echo json_encode($pdf_icon); ?>;</script>
-    <?php
-    return ob_get_clean();
-}
-add_shortcode('simple_contact_form', 'scf_render_form');
+    });
+    if (!wp_next_scheduled('scf_delete_old_attachments')) {
+        wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
+    }
 
 // ファイルアップロード用JSを追加
 add_action('wp_enqueue_scripts', function() {
