@@ -28,11 +28,31 @@ DEPLOY_TARGET="$PLUGIN_ROOT/model.joblib"
 
 echo "[$TIMESTAMP] retrain_deploy started (python=$PYTHON_BIN)" >> "$LOGFILE"
 
+find_wp_root() {
+  # start at plugin root and walk up to a few levels to find wp-load.php
+  local d="$1"
+  for i in 1 2 3 4 5; do
+    if [ -f "$d/wp-load.php" ] || [ -f "$d/wp-config.php" ]; then
+      echo "$d"
+      return 0
+    fi
+    d="$(cd "$d/.." && pwd)"
+  done
+  return 1
+}
+
 # 1) Export DB to CSV using WP-CLI if available, else try mysql client
 if command -v wp >/dev/null 2>&1; then
-  # Use WP-CLI -- adjust query as needed
-  echo "[$TIMESTAMP] Exporting DB via wp db query" >> "$LOGFILE"
-  wp db query "SELECT message AS message, class AS label FROM spam_list;" --skip-column-names --path="$PLUGIN_ROOT/.." | awk -F '\t' 'BEGIN{OFS=","}{gsub(/\"/,"\"\"",$0); print "\""$1"\",\""$2"\""}' > "$CSV_PATH"
+  # locate WordPress root (where wp-load.php lives)
+  WP_ROOT="$(find_wp_root "$PLUGIN_ROOT")" || true
+  if [ -z "$WP_ROOT" ]; then
+    # fallback: assume two levels up (plugin -> plugins -> wp-content -> wp-root)
+    WP_ROOT="$PLUGIN_ROOT/../.."
+  fi
+  WP_ROOT="$(cd "$WP_ROOT" && pwd)"
+  echo "[$TIMESTAMP] Exporting DB via wp db query (wp root: $WP_ROOT)" >> "$LOGFILE"
+  # send wp stderr to logfile (deprecation warnings), stdout is piped to awk
+  wp db query "SELECT message AS message, class AS label FROM spam_list;" --skip-column-names --path="$WP_ROOT" 2>>"$LOGFILE" | awk -F '\t' 'BEGIN{OFS=","}{gsub(/\"/,"\"\"",$0); print "\""$1"\",\""$2"\""}' > "$CSV_PATH"
 else
   # Try mysql client (needs env vars or .my.cnf)
   echo "[$TIMESTAMP] WP-CLI not found; attempting mysql client" >> "$LOGFILE"
