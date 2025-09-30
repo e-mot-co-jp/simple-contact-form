@@ -88,11 +88,11 @@ jQuery(function($){
       contentType: false,
       success: function(res){
         if(res.success){
-          $('.scf-message').text(res.data.message).css('color','green');
+          $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','green');
           $form[0].reset();
           fileList.empty();
         }else{
-          $('.scf-message').text(res.data.message).css('color','red');
+          $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','red');
         }
       },
       error: function(){
