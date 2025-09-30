@@ -56,6 +56,11 @@ function scf_render_form($atts = []) {
     </form>
     <div class="scf-message"></div>
     <?php
+    // PDFアイコンのURLをJSグローバル変数で渡す
+    $pdf_icon = plugins_url('pdf-icon.png', __FILE__);
+    ?>
+    <script>window.scfFileThumb = window.scfFileThumb || {}; window.scfFileThumb.pdfIcon = <?php echo json_encode($pdf_icon); ?>;</script>
+    <?php
     return ob_get_clean();
 }
 add_shortcode('simple_contact_form', 'scf_render_form');
@@ -63,12 +68,13 @@ add_shortcode('simple_contact_form', 'scf_render_form');
 // ファイルアップロード用JSを追加
 add_action('wp_enqueue_scripts', function() {
     wp_enqueue_script('scf-file-upload', plugins_url('file-upload.js', __FILE__), ['jquery'], '1.0', true);
+    wp_enqueue_style('scf-file-thumb', plugins_url('file-thumb.css', __FILE__));
 });
 
 // Ajax送信時のバリデーション・メール送信処理
 add_action('init', function() {
     if (isset($_POST['scf_ajax']) && $_POST['scf_ajax'] == '1') {
-        $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
+    $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
         $errors = [];
         foreach ($required as $key) {
             if (empty($_POST[$key])) {
@@ -98,6 +104,7 @@ add_action('init', function() {
             wp_send_json_error(['message' => implode("\n", $errors)]);
         }
         // ファイル保存
+        $uploaded_info = [];
         if (!empty($_FILES['scf_files'])) {
             require_once(ABSPATH.'wp-admin/includes/file.php');
             require_once(ABSPATH.'wp-admin/includes/media.php');
@@ -115,17 +122,35 @@ add_action('init', function() {
                 if (is_wp_error($id)) {
                     $errors[] = $name.' の保存に失敗しました。';
                 } else {
-                    $uploaded_urls[] = wp_get_attachment_url($id);
+                    $url = wp_get_attachment_url($id);
+                    $mime = get_post_mime_type($id);
+                    $thumb = '';
+                    if (strpos($mime, 'image/') === 0) {
+                        $thumb = wp_get_attachment_image_src($id, 'thumbnail');
+                        $thumb = $thumb ? $thumb[0] : $url;
+                    } elseif ($mime === 'application/pdf') {
+                        $thumb = plugins_url('pdf-icon.png', __FILE__);
+                    }
+                    $uploaded_info[] = [
+                        'url' => $url,
+                        'name' => $name,
+                        'thumb' => $thumb,
+                        'mime' => $mime,
+                    ];
+                    $uploaded_urls[] = $url;
                 }
             }
         }
         if (!empty($errors)) {
             wp_send_json_error(['message' => implode("\n", $errors)]);
         }
-        // メール送信
+        // お問い合わせ番号生成
+    $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
+        // 管理者宛メール
         $to = get_option('admin_email');
-        $subject = '[お問い合わせ] ' . sanitize_text_field($_POST['scf_inquiry']);
-        $body = "お名前: {$_POST['scf_name']}\n".
+        $subject = '[お問い合わせ:' . $inquiry_no . '] ' . sanitize_text_field($_POST['scf_inquiry']);
+        $body = "お問い合わせ番号: {$inquiry_no}\n".
+                "お名前: {$_POST['scf_name']}\n".
                 "メール: {$_POST['scf_email']}\n".
                 "郵便番号: {$_POST['scf_zip']}\n".
                 "住所: {$_POST['scf_address']}\n".
@@ -135,13 +160,50 @@ add_action('init', function() {
                 "お買い上げ日: {$_POST['scf_date']}\n".
                 "ご購入店舗名: {$_POST['scf_shop']}\n".
                 "内容: {$_POST['scf_content']}\n";
-        if ($uploaded_urls) {
-            $body .= "\n--- 添付ファイル ---\n".implode("\n", $uploaded_urls);
+        if ($uploaded_info) {
+            $body .= "\n--- 添付ファイル ---\n";
+            foreach ($uploaded_info as $f) {
+                $body .= $f['name'] . ': ' . $f['url'] . "\n";
+            }
         }
         $headers = ['From: '.get_bloginfo('name').' <'.$to.'>'];
         $sent = wp_mail($to, $subject, $body, $headers);
+
+        // お客様控えメール
+        $user_email = sanitize_email($_POST['scf_email']);
+        $user_subject = '【' . get_bloginfo('name') . '】お問い合わせ受付完了（お問い合わせ番号:'.$inquiry_no.'）';
+        $user_body = $_POST['scf_name'] . " 様\n\n".
+            "この度はお問い合わせいただき誠にありがとうございます。\n".
+            "下記の内容で受付いたしました。\n".
+            "担当者より折り返しご連絡いたしますので、今しばらくお待ちください。\n\n".
+            "--- お問い合わせ内容 ---\n".
+            "お問い合わせ番号: {$inquiry_no}\n".
+            "お名前: {$_POST['scf_name']}\n".
+            "メール: {$_POST['scf_email']}\n".
+            "郵便番号: {$_POST['scf_zip']}\n".
+            "住所: {$_POST['scf_address']}\n".
+            "電話番号: {$_POST['scf_tel']}\n".
+            "お問い合わせ種別: {$_POST['scf_inquiry']}\n".
+            "商品名: {$_POST['scf_product']}\n".
+            "お買い上げ日: {$_POST['scf_date']}\n".
+            "ご購入店舗名: {$_POST['scf_shop']}\n".
+            "内容: {$_POST['scf_content']}\n";
+        if ($uploaded_info) {
+            $user_body .= "\n--- 添付ファイル ---\n";
+            foreach ($uploaded_info as $f) {
+                $user_body .= $f['name'] . ': ' . $f['url'] . "\n";
+            }
+        }
+        $user_body .= "\n\n※本メールは自動送信です。\n"
+            . "万一、内容にお心当たりがない場合は本メールを破棄してください。\n"
+            . "────────────────────\n"
+            . get_bloginfo('name') . "\n"
+            . home_url() . "\n";
+        $user_headers = ['From: '.get_bloginfo('name').' <'.$to.'>'];
+        wp_mail($user_email, $user_subject, $user_body, $user_headers);
+
         if ($sent) {
-            wp_send_json_success(['message' => '送信が完了しました。']);
+            wp_send_json_success(['message' => '送信が完了しました。\nお問い合わせ番号: '.$inquiry_no.'\nご入力いただいたメールアドレス宛に控えを送信しました。']);
         } else {
             wp_send_json_error(['message' => '送信に失敗しました。']);
         }

@@ -30,8 +30,10 @@ jQuery(function($){
   function showFiles(files){
     fileList.empty();
     var ok = true;
+    var thumbList = $('<div class="scf-thumb-list"></div>');
     $.each(files, function(i, f){
       var ext = f.name.split('.').pop().toLowerCase();
+      var item = $('<div class="scf-thumb-item"></div>');
       if($.inArray(ext, allowed)===-1){
         fileList.append('<div style="color:red">'+f.name+'：許可されていない形式</div>');
         ok = false;
@@ -39,11 +41,24 @@ jQuery(function($){
         fileList.append('<div style="color:red">'+f.name+'：40MB超過</div>');
         ok = false;
       } else {
-        fileList.append('<div>'+f.name+' ('+Math.round(f.size/1024/1024*10)/10+'MB)</div>');
+        if(['jpg','jpeg','png','gif','heic'].indexOf(ext)!==-1){
+          var reader = new FileReader();
+          reader.onload = function(e){
+            item.append('<img src="'+e.target.result+'" alt="thumb">');
+            item.append('<div class="scf-thumb-label">'+f.name+'</div>');
+          };
+          reader.readAsDataURL(f);
+        } else if(ext==='pdf') {
+          item.append('<img src="'+(window.scfFileThumb ? window.scfFileThumb.pdfIcon : '')+'" alt="pdf" style="background:#fff;">');
+          item.append('<div class="scf-thumb-label">'+f.name+'</div>');
+        }
+        thumbList.append(item);
       }
     });
+    fileList.append(thumbList);
     if(!ok) fileInput.val('');
   }
+// PDFアイコンパスをグローバル変数で渡す（PHP側でwindow.scfFileThumb.pdfIconを出力すること）
   // 送信時にFormDataでファイルも送信
   $('.scf-form').off('submit').on('submit', function(e){
     e.preventDefault();
