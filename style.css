@@ -1,3 +1,33 @@
+.scf-file-area {
+	margin-bottom: 18px;
+}
+.scf-dropzone {
+	border: 2px dashed #bbb;
+	border-radius: 8px;
+	background: #fafafa;
+	color: #888;
+	text-align: center;
+	padding: 28px 10px;
+	margin-bottom: 8px;
+	cursor: pointer;
+	transition: border-color 0.2s, background 0.2s;
+	outline: none;
+}
+.scf-dropzone.dragover {
+	border-color: #0073aa;
+	background: #e3f2fd;
+	color: #0073aa;
+}
+.scf-file-list {
+	font-size: 0.97em;
+	margin-bottom: 4px;
+}
+@media (max-width: 600px) {
+	.scf-dropzone {
+		padding: 18px 2vw;
+		font-size: 0.98em;
+	}
+}
 /* シンプルなフォーム用スタイル */
 .scf-form {
 	width: 100%;
