@@ -1,6 +1,6 @@
 /* シンプルなフォーム用スタイル */
 .scf-form {
-	max-width: 500px;
+	width: 100%;
 	margin: 0 auto;
 	padding: 24px 16px;
 	background: #fff;
@@ -65,7 +65,7 @@
 @media (max-width: 600px) {
 	.scf-form {
 		padding: 12px 4vw;
-		max-width: 98vw;
+		width: 100%;
 	}
 	.scf-form label {
 		font-size: 0.98rem;
