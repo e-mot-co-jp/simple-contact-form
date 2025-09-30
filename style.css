@@ -52,6 +52,7 @@
     transition: all .3s;
     width: 100%;
     background: #eaedf2;
+    height: 50px;;
 }
 .scf-form textarea {
 	min-height: 100px;
