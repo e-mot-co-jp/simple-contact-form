@@ -43,12 +43,29 @@ find_wp_root() {
 
 # 1) Export DB to CSV using WP-CLI if available, else try mysql client
 if command -v wp >/dev/null 2>&1; then
-  # locate WordPress root (where wp-load.php lives)
-  WP_ROOT="$(find_wp_root "$PLUGIN_ROOT")" || true
-  if [ -z "$WP_ROOT" ]; then
-    # fallback: assume two levels up (plugin -> plugins -> wp-content -> wp-root)
-    WP_ROOT="$PLUGIN_ROOT/../.."
+  # Allow manual override via environment variable
+  if [ -n "${WP_ROOT:-}" ]; then
+    echo "[$TIMESTAMP] Using WP_ROOT from environment: $WP_ROOT" >> "$LOGFILE"
+  else
+    # locate WordPress root (where wp-load.php lives)
+    WP_ROOT="$(find_wp_root "$PLUGIN_ROOT")" || true
+    if [ -z "$WP_ROOT" ]; then
+      # fallback: assume two levels up (plugin -> plugins -> wp-content -> wp-root)
+      WP_ROOT="$PLUGIN_ROOT/../.."
+      echo "[$TIMESTAMP] Warning: automatic WP root detection failed; falling back to $WP_ROOT" >> "$LOGFILE"
+    else
+      echo "[$TIMESTAMP] Detected WP_ROOT: $WP_ROOT" >> "$LOGFILE"
+    fi
   fi
+
+  # verify the detected WP_ROOT looks like a WordPress install
+  if [ ! -f "$WP_ROOT/wp-load.php" ] && [ ! -f "$WP_ROOT/wp-config.php" ]; then
+    echo "[$TIMESTAMP] ERROR: WP_ROOT ($WP_ROOT) does not contain wp-load.php or wp-config.php." >> "$LOGFILE"
+    echo "[$TIMESTAMP] Hint: set WP_ROOT to your WordPress install and re-run, e.g.: export WP_ROOT=~/e-mot.co.jp/public_html/dev" >> "$LOGFILE"
+    echo "[$TIMESTAMP] Aborting due to invalid WP_ROOT." >> "$LOGFILE"
+    exit 3
+  fi
+
   WP_ROOT="$(cd "$WP_ROOT" && pwd)"
   echo "[$TIMESTAMP] Exporting DB via wp db query (wp root: $WP_ROOT)" >> "$LOGFILE"
   # send wp stderr to logfile (deprecation warnings), stdout is piped to awk
