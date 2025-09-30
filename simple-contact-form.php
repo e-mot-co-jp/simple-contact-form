@@ -53,6 +53,10 @@ function scf_render_form($atts = []) {
     echo '<div class="scf-file-list"></div>';
     echo '</div>';
     echo '<label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>';
+    // hidden field to ensure server-side handler runs for normal POST as well as AJAX
+    echo '<input type="hidden" name="scf_ajax" value="1">';
+    // nonce field for CSRF protection
+    echo wp_nonce_field('scf_submit', 'scf_nonce', true, false);
     echo '<button type="submit">送信</button>';
     echo '</form>';
     echo '<div class="scf-message"></div>';
@@ -206,6 +210,11 @@ add_action('wp_enqueue_scripts', function() {
 // Ajax送信時のバリデーション・メール送信処理
 add_action('init', function() {
     if (isset($_POST['scf_ajax']) && $_POST['scf_ajax'] == '1') {
+        // nonce check: allow processing only when nonce is valid
+        if (empty($_POST['scf_nonce']) || !wp_verify_nonce($_POST['scf_nonce'], 'scf_submit')) {
+            wp_send_json_error(['message' => '無効なリクエストです。']);
+            exit;
+        }
     $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
         $errors = [];
         foreach ($required as $key) {
