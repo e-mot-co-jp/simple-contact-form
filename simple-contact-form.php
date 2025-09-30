@@ -1,3 +1,138 @@
+// お問い合わせデータ保存用テーブル作成
+register_activation_hook(__FILE__, function() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'scf_inquiries';
+    $charset_collate = $wpdb->get_charset_collate();
+    $sql = "CREATE TABLE IF NOT EXISTS $table (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        inquiry_no VARCHAR(32),
+        name VARCHAR(255),
+        email VARCHAR(255),
+        zip VARCHAR(32),
+        address TEXT,
+        tel VARCHAR(64),
+        inquiry VARCHAR(255),
+        product VARCHAR(255),
+        date VARCHAR(32),
+        shop VARCHAR(255),
+        content TEXT,
+        files TEXT,
+        created DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id)
+    ) $charset_collate;";
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+});
+// お問い合わせ管理メニュー追加
+add_action('admin_menu', function() {
+    add_menu_page(
+        'お問い合わせ管理',
+        'お問い合わせ管理',
+        'manage_options',
+        'scf_inquiry_list',
+        'scf_admin_inquiry_list_page',
+        'dashicons-email-alt2',
+        26
+    );
+    add_submenu_page(
+        'scf_inquiry_list',
+        'お問い合わせ設定',
+        '設定',
+        'manage_options',
+        'scf_inquiry_settings',
+        'scf_admin_inquiry_settings_page'
+    );
+});
+
+function scf_admin_inquiry_settings_page() {
+    // 保存処理
+    if (isset($_POST['scf_settings_nonce']) && wp_verify_nonce($_POST['scf_settings_nonce'], 'scf_settings')) {
+        $period = max(1, intval($_POST['scf_file_period']));
+        $mail = sanitize_email($_POST['scf_support_mail']);
+        update_option('scf_file_period', $period);
+        update_option('scf_support_mail', $mail);
+        echo '<div class="updated notice"><p>設定を保存しました。</p></div>';
+    }
+    $period = get_option('scf_file_period', 365);
+    $mail = get_option('scf_support_mail', 'support@e-mot.co.jp');
+    echo '<div class="wrap"><h1>お問い合わせ設定</h1>';
+    echo '<form method="post">';
+    wp_nonce_field('scf_settings', 'scf_settings_nonce');
+    echo '<table class="form-table">';
+    echo '<tr><th>ファイル保持期間</th><td><input type="number" name="scf_file_period" value="'.esc_attr($period).'" min="1" style="width:80px;"> 日</td></tr>';
+    echo '<tr><th>サポートメールアドレス</th><td><input type="email" name="scf_support_mail" value="'.esc_attr($mail).'" style="width:300px;"></td></tr>';
+    echo '</table>';
+    echo '<p><input type="submit" class="button-primary" value="保存"></p>';
+    echo '</form>';
+    echo '</div>';
+}
+
+function scf_admin_inquiry_list_page() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'scf_inquiries';
+    $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY created DESC LIMIT 100");
+    echo '<div class="wrap"><h1>お問い合わせ管理</h1>';
+    if (!$rows) {
+        echo '<p>まだお問い合わせはありません。</p></div>';
+        return;
+    }
+    echo '<table class="widefat fixed striped"><thead><tr>';
+    echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容</th><th>添付</th></tr></thead><tbody>';
+    foreach ($rows as $r) {
+        echo '<tr>';
+        echo '<td>' . esc_html($r->created) . '</td>';
+        echo '<td>' . esc_html($r->inquiry_no) . '</td>';
+        echo '<td>' . esc_html($r->name) . '</td>';
+        echo '<td><a href="mailto:' . esc_attr($r->email) . '">' . esc_html($r->email) . '</a></td>';
+        echo '<td>' . esc_html($r->inquiry) . '</td>';
+        echo '<td>' . nl2br(esc_html(mb_strimwidth($r->content,0,60,'...'))) . '</td>';
+        // 添付
+        $files = $r->files ? maybe_unserialize($r->files) : [];
+        echo '<td>';
+        if ($files && is_array($files)) {
+            foreach ($files as $f) {
+                if (strpos($f['mime'], 'image/') === 0) {
+                    echo '<a href="' . esc_url($f['url']) . '" target="_blank"><img src="' . esc_url($f['thumb']) . '" style="width:40px;height:40px;object-fit:cover;border-radius:4px;margin:2px;vertical-align:middle;"></a> ';
+                } else {
+                    echo '<a href="' . esc_url($f['url']) . '" target="_blank">' . esc_html($f['name']) . '</a><br>';
+                }
+            }
+        }
+        echo '</td>';
+        echo '</tr>';
+    }
+    echo '</tbody></table></div>';
+}
+// ファイル保持期間に応じて添付ファイルを自動削除
+add_action('scf_delete_old_attachments', function() {
+    $period = intval(get_option('scf_file_period', 365));
+    $before = $period > 0 ? $period . ' days ago' : '365 days ago';
+    $args = [
+        'post_type' => 'attachment',
+        'post_status' => 'inherit',
+        'posts_per_page' => -1,
+        'date_query' => [
+            [
+                'before' => $before,
+                'column' => 'post_date_gmt',
+            ],
+        ],
+        'meta_query' => [
+            [
+                'key' => '_scf_uploaded',
+                'value' => '1',
+            ],
+        ],
+        'fields' => 'ids',
+    ];
+    $attachments = get_posts($args);
+    foreach ($attachments as $att_id) {
+        wp_delete_attachment($att_id, true);
+    }
+});
+if (!wp_next_scheduled('scf_delete_old_attachments')) {
+    wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
+}
 <?php
 /*
 Plugin Name: Simple Contact Form
@@ -104,7 +239,8 @@ add_action('init', function() {
             wp_send_json_error(['message' => implode("\n", $errors)]);
         }
         // ファイル保存
-        $uploaded_info = [];
+    $uploaded_info = [];
+    $uploaded_paths = [];
         if (!empty($_FILES['scf_files'])) {
             require_once(ABSPATH.'wp-admin/includes/file.php');
             require_once(ABSPATH.'wp-admin/includes/media.php');
@@ -136,8 +272,11 @@ add_action('init', function() {
                         'name' => $name,
                         'thumb' => $thumb,
                         'mime' => $mime,
+                        'id' => $id,
                     ];
                     $uploaded_urls[] = $url;
+                    $uploaded_paths[] = get_attached_file($id);
+                    update_post_meta($id, '_scf_uploaded', '1');
                 }
             }
         }
@@ -145,9 +284,27 @@ add_action('init', function() {
             wp_send_json_error(['message' => implode("\n", $errors)]);
         }
         // お問い合わせ番号生成
-    $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
+        $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
+
+        // DB保存
+        global $wpdb;
+        $table = $wpdb->prefix . 'scf_inquiries';
+        $wpdb->insert($table, [
+            'inquiry_no' => $inquiry_no,
+            'name' => sanitize_text_field($_POST['scf_name']),
+            'email' => sanitize_email($_POST['scf_email']),
+            'zip' => sanitize_text_field($_POST['scf_zip']),
+            'address' => sanitize_text_field($_POST['scf_address']),
+            'tel' => sanitize_text_field($_POST['scf_tel']),
+            'inquiry' => sanitize_text_field($_POST['scf_inquiry']),
+            'product' => sanitize_text_field($_POST['scf_product']),
+            'date' => sanitize_text_field($_POST['scf_date']),
+            'shop' => sanitize_text_field($_POST['scf_shop']),
+            'content' => sanitize_textarea_field($_POST['scf_content']),
+            'files' => $uploaded_info ? maybe_serialize($uploaded_info) : '',
+        ]);
         // 管理者宛メール
-        $to = get_option('admin_email');
+    $to = get_option('scf_support_mail', 'support@e-mot.co.jp');
         $subject = '[お問い合わせ:' . $inquiry_no . '] ' . sanitize_text_field($_POST['scf_inquiry']);
         $body = "お問い合わせ番号: {$inquiry_no}\n".
                 "お名前: {$_POST['scf_name']}\n".
@@ -191,7 +348,7 @@ add_action('init', function() {
         if ($uploaded_info) {
             $user_body .= "\n--- 添付ファイル ---\n";
             foreach ($uploaded_info as $f) {
-                $user_body .= $f['name'] . ': ' . $f['url'] . "\n";
+                $user_body .= $f['name'] . "\n";
             }
         }
         $user_body .= "\n\n※本メールは自動送信です。\n"
@@ -200,7 +357,7 @@ add_action('init', function() {
             . get_bloginfo('name') . "\n"
             . home_url() . "\n";
         $user_headers = ['From: '.get_bloginfo('name').' <'.$to.'>'];
-        wp_mail($user_email, $user_subject, $user_body, $user_headers);
+        wp_mail($user_email, $user_subject, $user_body, $user_headers, $uploaded_paths);
 
         if ($sent) {
             $msg = '送信が完了しました。\nお問い合わせ番号: '.$inquiry_no.'\nご入力いただいたメールアドレス宛に控えを送信しました。';
