@@ -183,7 +183,8 @@ function scf_admin_inquiry_list_page() {
         echo '<div class="notice notice-warning"><p>データベーステーブル ' . esc_html($table) . ' が存在しません。プラグインを再有効化してください。</p></div></div>';
         return;
     }
-    // filters: inquiry type and date range
+    // filters: inquiry number, type and date range
+    $filter_q = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
     $filter_type = isset($_GET['filter_type']) ? sanitize_text_field($_GET['filter_type']) : '';
     $filter_from = isset($_GET['filter_from']) ? sanitize_text_field($_GET['filter_from']) : '';
     $filter_to = isset($_GET['filter_to']) ? sanitize_text_field($_GET['filter_to']) : '';
@@ -194,6 +195,10 @@ function scf_admin_inquiry_list_page() {
     // build WHERE clauses
     $where = [];
     $params = [];
+    if ( $filter_q !== '' ) {
+        $where[] = ' inquiry_no LIKE %s ';
+        $params[] = '%' . $wpdb->esc_like( $filter_q ) . '%';
+    }
     if ( $filter_type !== '' ) {
         $where[] = ' inquiry = %s ';
         $params[] = $filter_type;
@@ -235,6 +240,7 @@ function scf_admin_inquiry_list_page() {
     // filter form
     echo '<form method="get" class="scf-filter" style="margin-bottom:12px;">';
     echo '<input type="hidden" name="page" value="scf_inquiry_list">';
+    echo '<label style="margin-right:8px;">お問い合わせ番号: <input type="search" name="q" value="' . esc_attr($filter_q) . '" placeholder="例: 240930-ABCD"></label>';
     echo '<label style="margin-right:8px;">種別: <select name="filter_type">';
     echo '<option value="">-- 全て --</option>';
     $types = ['保証内容について','オンラインショップについて','製品の仕様などについて','リコールについて','その他'];
