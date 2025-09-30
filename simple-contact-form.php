@@ -183,13 +183,75 @@ function scf_admin_inquiry_list_page() {
         echo '<div class="notice notice-warning"><p>データベーステーブル ' . esc_html($table) . ' が存在しません。プラグインを再有効化してください。</p></div></div>';
         return;
     }
-    // pagination
-    $per_page = 100;
+    // filters: inquiry type and date range
+    $filter_type = isset($_GET['filter_type']) ? sanitize_text_field($_GET['filter_type']) : '';
+    $filter_from = isset($_GET['filter_from']) ? sanitize_text_field($_GET['filter_from']) : '';
+    $filter_to = isset($_GET['filter_to']) ? sanitize_text_field($_GET['filter_to']) : '';
+    // page size selection (allow override)
+    $per_page = isset($_GET['per_page']) ? max(1, intval($_GET['per_page'])) : 100;
     $paged = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
-    $total = intval($wpdb->get_var("SELECT COUNT(*) FROM $table"));
+
+    // build WHERE clauses
+    $where = [];
+    $params = [];
+    if ( $filter_type !== '' ) {
+        $where[] = ' inquiry = %s ';
+        $params[] = $filter_type;
+    }
+    if ( $filter_from !== '' ) {
+        $where[] = ' created >= %s ';
+        $params[] = $filter_from . ' 00:00:00';
+    }
+    if ( $filter_to !== '' ) {
+        $where[] = ' created <= %s ';
+        $params[] = $filter_to . ' 23:59:59';
+    }
+    $where_sql = '';
+    if ( $where ) {
+        $where_sql = 'WHERE ' . implode(' AND ', $where);
+    }
+
+    // total count with filters
+    $count_sql = "SELECT COUNT(*) FROM $table " . $where_sql;
+    if ( $params ) {
+        $total = intval($wpdb->get_var( $wpdb->prepare( $count_sql, $params ) ));
+    } else {
+        $total = intval($wpdb->get_var( $count_sql ));
+    }
     $total_pages = $total > 0 ? ceil($total / $per_page) : 1;
     $offset = ($paged - 1) * $per_page;
-    $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table ORDER BY created DESC LIMIT %d OFFSET %d", $per_page, $offset));
+
+    // select rows with filters
+    $select_sql = "SELECT * FROM $table " . $where_sql . " ORDER BY created DESC LIMIT %d OFFSET %d";
+    if ( $params ) {
+        $prepare_params = $params;
+        $prepare_params[] = $per_page;
+        $prepare_params[] = $offset;
+        $rows = $wpdb->get_results( call_user_func_array([$wpdb, 'prepare'], array_merge([$select_sql], $prepare_params)) );
+    } else {
+        $rows = $wpdb->get_results( $wpdb->prepare( $select_sql, $per_page, $offset ) );
+    }
+
+    // filter form
+    echo '<form method="get" class="scf-filter" style="margin-bottom:12px;">';
+    echo '<input type="hidden" name="page" value="scf_inquiry_list">';
+    echo '<label style="margin-right:8px;">種別: <select name="filter_type">';
+    echo '<option value="">-- 全て --</option>';
+    $types = ['保証内容について','オンラインショップについて','製品の仕様などについて','リコールについて','その他'];
+    foreach ($types as $t) {
+        echo '<option value="' . esc_attr($t) . '"' . selected($filter_type, $t, false) . '>' . esc_html($t) . '</option>';
+    }
+    echo '</select></label>';
+    echo '<label style="margin-right:8px;">日付 from: <input type="date" name="filter_from" value="' . esc_attr($filter_from) . '"></label>';
+    echo '<label style="margin-right:8px;">to: <input type="date" name="filter_to" value="' . esc_attr($filter_to) . '"></label>';
+    echo '<label style="margin-right:8px;">表示件数: <select name="per_page">';
+    foreach ([20,50,100,200] as $opt) {
+        echo '<option value="' . intval($opt) . '"' . selected($per_page, $opt, false) . '>' . intval($opt) . '</option>';
+    }
+    echo '</select></label>';
+    echo '<input type="submit" class="button" value="絞り込む">';
+    echo ' <a class="button" href="' . esc_url(admin_url('admin.php?page=scf_inquiry_list')) . '">リセット</a>';
+    echo '</form>';
     if (!$rows) {
         echo '<p>まだお問い合わせはありません。</p></div>';
         return;
