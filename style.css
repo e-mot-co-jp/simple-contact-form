@@ -45,18 +45,13 @@
 	line-height: 1.5;
     font-weight: 600;
 }
-.scf-form input,
-.scf-form textarea,
-.scf-form select {
-	width: 100%;
-	max-width: 100%;
-	margin-top: 4px;
-	margin-bottom: 0;
-	padding: 8px;
-	font-size: 1rem;
-	border: 1px solid #ccc;
-	border-radius: 4px;
-	box-sizing: border-box;
+.scf-form input[type=date],.scf-form  input[type=email],.scf-form  input[type=number],.scf-form  input[type=password],.scf-form  input[type=search],.scf-form  input[type=tel],.scf-form  input[type=text],.scf-form  input[type=url],.scf-form  select,.scf-form  textarea {
+    border: 1px solid #CCCCCC;
+    border-radius: 3px;
+    padding: .5rem 1rem;
+    transition: all .3s;
+    width: 100%;
+    background: #DDDDDD;
 }
 .scf-form textarea {
 	min-height: 100px;
