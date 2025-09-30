@@ -43,6 +43,7 @@
 	margin-bottom: 16px;
 	font-size: 1rem;
 	line-height: 1.5;
+    font-weight: 600;
 }
 .scf-form input,
 .scf-form textarea,
