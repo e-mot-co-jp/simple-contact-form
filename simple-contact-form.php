@@ -83,6 +83,9 @@ register_activation_hook(__FILE__, function() {
         shop VARCHAR(255),
         content TEXT,
         files TEXT,
+        is_spam TINYINT(1) DEFAULT 0,
+        spam_note TEXT,
+        spam_engine VARCHAR(64),
         created DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id)
     ) $charset_collate;";
@@ -112,12 +115,139 @@ function scf_create_table() {
             shop VARCHAR(255),
             content TEXT,
             files TEXT,
+            is_spam TINYINT(1) DEFAULT 0,
+            spam_note TEXT,
+            spam_engine VARCHAR(64),
             created DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
         ) $charset_collate;";
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
     }
+}
+
+/**
+ * Simple spam check. Returns array: [is_spam(bool), engine(string), note(string)].
+ * - By default performs keyword check in PHP.
+ * - If option 'scf_use_python_spam' is true and 'scf_python_path' is set, it will attempt to call Python script and prefer its result.
+ */
+function scf_check_spam($text) {
+    $text = mb_strtolower(trim($text));
+    // default keyword list (Japanese sales-related words)
+    $keywords = [
+        '営業', '販売', 'セール', 'セールス', '見積', 'ご提案', 'ご案内', '促進', '勧誘', '販促', 'お問い合わせ（営業）'
+    ];
+    foreach ($keywords as $kw) {
+        if (mb_strpos($text, mb_strtolower($kw)) !== false) {
+            return [true, 'keyword', 'matched: ' . $kw];
+        }
+    }
+
+    // try python classifier if enabled (user selected). Resolve ~ and try to locate executable.
+    if ( get_option('scf_use_python_spam', false) ) {
+        $py_path = trim(get_option('scf_python_path', 'python3'));
+        $script = plugin_dir_path(__FILE__) . 'sales_block.py';
+
+        // expand ~ to home
+        if ($py_path !== '' && strpos($py_path, '~') === 0) {
+            $home = getenv('HOME');
+            if (!$home && !empty($_SERVER['HOME'])) $home = $_SERVER['HOME'];
+            if ($home) {
+                $py_path = $home . substr($py_path, 1);
+            }
+        }
+
+        $resolved = '';
+        if ($py_path === '') {
+            $resolved = '';
+        } elseif (strpos($py_path, '/') === false) {
+            // command name like 'python3' — try which
+            $which = trim(@shell_exec('which ' . escapeshellarg($py_path) . ' 2>/dev/null'));
+            if ($which) $resolved = $which;
+        } else {
+            // path provided
+            if (is_executable($py_path)) {
+                $resolved = $py_path;
+            } elseif (file_exists($py_path)) {
+                // try to use it even if not marked executable
+                $resolved = $py_path;
+            }
+        }
+
+        if ($resolved) {
+            $cmd = escapeshellcmd($resolved) . ' ' . escapeshellarg($script);
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
+            $proc = @proc_open($cmd, $descriptors, $pipes);
+            if (is_resource($proc)) {
+                // write text to stdin
+                fwrite($pipes[0], $text . "\n");
+                fclose($pipes[0]);
+                // non-blocking read with timeout
+                stream_set_blocking($pipes[1], false);
+                stream_set_blocking($pipes[2], false);
+                $output = '';
+                $errout = '';
+                $start = microtime(true);
+                $timeout = 3.0; // seconds
+                // loop until process exits or timeout
+                while (true) {
+                    $read = [$pipes[1], $pipes[2]];
+                    $write = null;
+                    $except = null;
+                    // wait up to 0.2s
+                    $num = @stream_select($read, $write, $except, 0, 200000);
+                    if ($num === false) break;
+                    if ($num > 0) {
+                        foreach ($read as $r) {
+                            $buf = stream_get_contents($r);
+                            if ($r === $pipes[1]) $output .= $buf;
+                            else $errout .= $buf;
+                        }
+                    }
+                    $status = proc_get_status($proc);
+                    if (!$status['running']) break;
+                    if ((microtime(true) - $start) > $timeout) {
+                        // timeout: terminate process
+                        @proc_terminate($proc);
+                        break;
+                    }
+                    usleep(100000); // 0.1s
+                }
+                // read any remaining
+                $output .= stream_get_contents($pipes[1]);
+                $errout .= stream_get_contents($pipes[2]);
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                $code = proc_close($proc);
+                $out = trim($output);
+                $err = trim($errout);
+                if ($out === 'spam') {
+                    return [true, 'python', 'python:spam'];
+                } elseif ($out === 'ham') {
+                    return [false, 'python', 'python:ham'];
+                } else {
+                    // unexpected output or timeout — fallthrough to keyword result
+                    if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                        error_log('[scf] python classifier unexpected output: ' . substr($out,0,200) . ' err:' . substr($err,0,200));
+                    }
+                }
+            } else {
+                if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                    error_log('[scf] proc_open failed for command: ' . $cmd);
+                }
+            }
+        } else {
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('[scf] python path could not be resolved: ' . $py_path);
+            }
+        }
+    }
+
+    return [false, 'none', 'no match'];
 }
 
 // お問い合わせ管理メニュー追加
@@ -155,20 +285,43 @@ function scf_admin_inquiry_settings_page() {
     if (isset($_POST['scf_settings_nonce']) && wp_verify_nonce($_POST['scf_settings_nonce'], 'scf_settings')) {
         $period = max(1, intval($_POST['scf_file_period']));
         $mail = sanitize_email($_POST['scf_support_mail']);
+        $use_py = isset($_POST['scf_use_python_spam']) ? 1 : 0;
+        $py_path = isset($_POST['scf_python_path']) ? sanitize_text_field($_POST['scf_python_path']) : '';
         update_option('scf_file_period', $period);
         update_option('scf_support_mail', $mail);
+        update_option('scf_use_python_spam', $use_py);
+        update_option('scf_python_path', $py_path);
         echo '<div class="updated notice"><p>設定を保存しました。</p></div>';
     }
+    // テスト実行ハンドラ
+    if (isset($_POST['scf_test_nonce']) && wp_verify_nonce($_POST['scf_test_nonce'], 'scf_test')) {
+        $test_text = isset($_POST['scf_test_text']) ? sanitize_textarea_field($_POST['scf_test_text']) : '';
+        list($t_flag, $t_engine, $t_note) = scf_check_spam($test_text);
+        $t_label = $t_flag ? 'SPAM' : 'OK';
+        echo '<div class="updated notice"><p>判定結果: <strong>' . esc_html($t_label) . '</strong>（エンジン: ' . esc_html($t_engine) . '、メモ: ' . esc_html($t_note) . '）</p></div>';
+    }
     $period = get_option('scf_file_period', 365);
-    $mail = get_option('scf_support_mail', 'support@e-mot.co.jp');
+    $mail = get_option('scf_support_mail', 'support@e-m.co.jp');
+    $use_py = get_option('scf_use_python_spam', 0);
+    $py_path = get_option('scf_python_path', '~/miniconda3/bin/python');
     echo '<div class="wrap"><h1>お問い合わせ設定</h1>';
     echo '<form method="post">';
     wp_nonce_field('scf_settings', 'scf_settings_nonce');
     echo '<table class="form-table">';
     echo '<tr><th>ファイル保持期間</th><td><input type="number" name="scf_file_period" value="'.esc_attr($period).'" min="1" style="width:80px;"> 日</td></tr>';
     echo '<tr><th>サポートメールアドレス</th><td><input type="email" name="scf_support_mail" value="'.esc_attr($mail).'" style="width:300px;"></td></tr>';
+    echo '<tr><th>Pythonスパム判定を使用</th><td><label><input type="checkbox" name="scf_use_python_spam" ' . checked($use_py, 1, false) . ' /> 有効にする</label></td></tr>';
+    echo '<tr><th>Python実行パス</th><td><input type="text" name="scf_python_path" value="' . esc_attr($py_path) . '" style="width:420px;" placeholder="/Users/you/miniconda3/bin/python"><p class="description">例: /Users/you/miniconda3/bin/python （~ は展開されます）</p></td></tr>';
     echo '</table>';
     echo '<p><input type="submit" class="button-primary" value="保存"></p>';
+    echo '</form>';
+    // スパム判定の即時テストフォーム
+    echo '<hr>';
+    echo '<h2>スパム判定テスト</h2>';
+    echo '<form method="post">';
+    wp_nonce_field('scf_test', 'scf_test_nonce');
+    echo '<p><textarea name="scf_test_text" rows="6" style="width:100%;" placeholder="ここにテスト用のテキスト（種別・商品名・本文などを結合したもの）を貼り付けてください"></textarea></p>';
+    echo '<p><input type="submit" class="button" value="判定を実行"></p>';
     echo '</form>';
     echo '</div>';
 }
@@ -288,7 +441,7 @@ function scf_admin_inquiry_list_page() {
         ]) . '</div></div>';
     }
     echo '<table class="widefat fixed striped"><thead><tr>';
-    echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容（抜粋）</th><th>添付</th></tr></thead><tbody>';
+    echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容（抜粋）</th><th>添付</th><th>判定</th></tr></thead><tbody>';
     foreach ($rows as $r) {
         echo '<tr>';
         echo '<td>' . esc_html($r->created) . '</td>';
@@ -297,10 +450,10 @@ function scf_admin_inquiry_list_page() {
         echo '<td>' . esc_html($r->name) . '</td>';
         echo '<td><a href="mailto:' . esc_attr($r->email) . '">' . esc_html($r->email) . '</a></td>';
         echo '<td>' . esc_html($r->inquiry) . '</td>';
-        echo '<td>' . nl2br(esc_html(mb_strimwidth($r->content,0,120,'...'))) . '</td>';
+    echo '<td>' . nl2br(esc_html(mb_strimwidth($r->content,0,120,'...'))) . '</td>';
         // 添付
         $files = $r->files ? maybe_unserialize($r->files) : [];
-        echo '<td>';
+    echo '<td>';
         if ($files && is_array($files)) {
             foreach ($files as $f) {
                 if (strpos($f['mime'], 'image/') === 0) {
@@ -309,6 +462,14 @@ function scf_admin_inquiry_list_page() {
                     echo '<a href="' . esc_url($f['url']) . '" target="_blank">' . esc_html($f['name']) . '</a><br>';
                 }
             }
+        }
+        echo '</td>';
+        // 判定バッジ
+        echo '<td>';
+        if ( isset($r->is_spam) && $r->is_spam ) {
+            echo '<span style="color:#fff;background:#d9534f;padding:4px 8px;border-radius:12px;display:inline-block;">SPAM</span>';
+        } else {
+            echo '<span style="color:#fff;background:#5cb85c;padding:4px 8px;border-radius:12px;display:inline-block;">OK</span>';
         }
         echo '</td>';
         echo '</tr>';
@@ -363,6 +524,11 @@ function scf_admin_inquiry_view_page() {
     ];
     foreach ($fields as $k => $v) {
         echo '<tr><th style="width:18%;text-align:left;">' . esc_html($k) . '</th><td>' . $v . '</td></tr>';
+    }
+    // spam 情報
+    echo '<tr><th style="text-align:left;">判定</th><td>' . (isset($row->is_spam) && $row->is_spam ? '<strong style="color:#d9534f;">SPAM</strong>' : '<strong style="color:#5cb85c;">OK</strong>') . '</td></tr>';
+    if (!empty($row->spam_engine) || !empty($row->spam_note)) {
+        echo '<tr><th style="text-align:left;">判定エンジン / メモ</th><td>' . esc_html($row->spam_engine) . ' / ' . esc_html($row->spam_note) . '</td></tr>';
     }
     echo '</table>';
     // attachments
@@ -504,6 +670,13 @@ add_action('init', function() {
 
     // Ensure table exists before insert
     scf_create_table();
+    // spam 判定（DBに保存する値を先に決める）
+    $combined_for_spam = trim(
+        sanitize_text_field($_POST['scf_inquiry']) . " \n" .
+        sanitize_text_field($_POST['scf_product']) . " \n" .
+        sanitize_textarea_field($_POST['scf_content'])
+    );
+    list($is_spam_flag, $spam_engine, $spam_note) = scf_check_spam($combined_for_spam);
     // DB保存
         global $wpdb;
         $table = $wpdb->prefix . 'scf_inquiries';
@@ -520,6 +693,9 @@ add_action('init', function() {
             'shop' => sanitize_text_field($_POST['scf_shop']),
             'content' => sanitize_textarea_field($_POST['scf_content']),
             'files' => $uploaded_info ? maybe_serialize($uploaded_info) : '',
+            'is_spam' => $is_spam_flag ? 1 : 0,
+            'spam_note' => $spam_note,
+            'spam_engine' => $spam_engine,
         ]);
         // Diagnostic logging: record insert id and any DB error
         if ( defined('WP_DEBUG') && WP_DEBUG ) {
@@ -549,7 +725,15 @@ add_action('init', function() {
             }
         }
         $headers = ['From: '.get_bloginfo('name').' <'.$to.'>'];
-        $sent = wp_mail($to, $subject, $body, $headers);
+        if ($is_spam_flag) {
+            // spam の場合は管理者通知を送らない（運用上はDBには記録する）
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('[scf] submission marked as spam; engine=' . $spam_engine . ' note=' . $spam_note);
+            }
+            $sent = true; // 管理者通知はスキップしたが処理は成功扱いとする
+        } else {
+            $sent = wp_mail($to, $subject, $body, $headers);
+        }
 
         // お客様控えメール
         $user_email = sanitize_email($_POST['scf_email']);
