@@ -70,8 +70,8 @@ function scf_render_form($atts = []) {
                 <li>こちらは一般ユーザーの方の為のお問い合わせフォームです。法人の方からのお問い合わせ、売込み、営業につきましては一律破棄されます。</li>
                 <li>こちらの問い合わせフォームはSSL通信によって暗号化され保護されています。</li>
                 <li>お客様からご提供いただいた個人情報は当社の個人情報保護方針に従い、お客様のお問い合わせ内容を確認し、ご回答するために利用することを目的としています。</li>
-                <li>フォーム送信前に、<a href="<?php echo esc_url( get_privacy_policy_url() ); ?>">「プライバシーポリシー」</a>、<a href="/site-policies/">「サイトポリシー」</a> をご確認ください。送信された場合は、こちらに同意したこととなりますのでご了承ください。</li>
-                <li>５営業日を過ぎても返信がない場合はお手数ですがお電話にてご連絡ください。<br>ユーザーサポートダイヤル：<a href="tel:0256648282">0256-64-8282</a></li>
+                <li>フォーム送信前に、<a href="<?php echo esc_url( get_privacy_policy_url() ); ?>" style="text-decoration: underline;">「プライバシーポリシー」</a>、<a href="/site-policies/" style="text-decoration: underline;">「サイトポリシー」</a> をご確認ください。送信された場合は、こちらに同意したこととなりますのでご了承ください。</li>
+                <li>５営業日を過ぎても返信がない場合はお手数ですがお電話にてご連絡ください。<br>ユーザーサポートダイヤル：<a href="tel:0256648282" style="text-decoration: underline;">0256-64-8282</a></li>
             </ul>
             <p style="margin-top:8px;"><label><input type="checkbox" name="scf_agree" value="1"> 注意事項をご確認・同意いただきます（チェックしてください）。</label></p>
         </div>
