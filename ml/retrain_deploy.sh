@@ -149,6 +149,96 @@ if [ ! -s "$CSV_PATH" ]; then
   exit 4
 fi
 
+# If sanitizer removed all rows, attempt fallback: export from scf_inquiries table
+if [ -z "$KEPT_COUNT" ] || [ "$KEPT_COUNT" -eq 0 ] 2>/dev/null; then
+  echo "[$TIMESTAMP] Sanitizer kept 0 rows — attempting fallback export from scf_inquiries" >> "$LOGFILE"
+  if command -v wp >/dev/null 2>&1; then
+    PREFIX=$(wp db prefix --path="$WP_ROOT" 2>>"$LOGFILE" | tr -d '\r\n' || true)
+    if [ -z "$PREFIX" ]; then
+      PREFIX='wp_'
+    fi
+    TABLE="${PREFIX}scf_inquiries"
+    echo "[$TIMESTAMP] Exporting from table: $TABLE" >> "$LOGFILE"
+    wp db query "SELECT CONCAT_WS(' \\n ', COALESCE(inquiry, ''), COALESCE(product, ''), COALESCE(content, '')) AS message, CASE WHEN COALESCE(is_spam,0)=1 THEN 'spam' ELSE 'ham' END AS label FROM ${TABLE};" --skip-column-names --path="$WP_ROOT" 2>>"$LOGFILE" | awk -F '\t' 'BEGIN{OFS=","}{gsub(/\"/,"\"\"",$0); print "\""$1"\",\""$2"\""}' > "$CSV_PATH" || true
+  else
+    # mysql fallback if environment variables provided
+    if [ -n "${DB_NAME:-}" ] && [ -n "${DB_USER:-}" ]; then
+      PREFIX=${WP_DB_PREFIX:-'wp_'}
+      TABLE="${PREFIX}scf_inquiries"
+      echo "[$TIMESTAMP] Using mysql client to export from $TABLE" >> "$LOGFILE"
+      mysql -u "$DB_USER" -p"$DB_PASS" -h "${DB_HOST:-localhost}" -e "SELECT CONCAT_WS(' \\n ', COALESCE(inquiry, ''), COALESCE(product, ''), COALESCE(content, '')) AS message, IF(COALESCE(is_spam,0)=1,'spam','ham') AS label FROM ${TABLE}" "$DB_NAME" | awk -F '\t' 'BEGIN{OFS=","}{gsub(/\"/,"\"\"",$0); print "\""$1"\",\""$2"\""}' > "$CSV_PATH" || true
+    else
+      echo "[$TIMESTAMP] No WP-CLI and no mysql env vars; cannot fallback to scf_inquiries" >> "$LOGFILE"
+    fi
+  fi
+
+  # If fallback produced CSV, ensure header and re-run sanitizer
+  if [ -s "$CSV_PATH" ]; then
+    echo "[$TIMESTAMP] Fallback CSV generated; ensuring header and sanitizing" >> "$LOGFILE"
+    first_line2="$(head -n 1 "$CSV_PATH" | tr -d '\r' | tr -d '\n' | sed -e 's/^\s*//')"
+    echo "[$TIMESTAMP] Fallback CSV first line: $first_line2" >> "$LOGFILE"
+    echo "$first_line2" | tr '[:upper:]' '[:lower:]' | grep -Eq 'message|text|label|class'
+    if [ $? -ne 0 ]; then
+      echo "[$TIMESTAMP] Fallback CSV lacks header; prepending header" >> "$LOGFILE"
+      TMP_CSV2="$CSV_PATH.tmp.$$"
+      printf '"message","label"\n' > "$TMP_CSV2"
+      cat "$CSV_PATH" >> "$TMP_CSV2"
+      mv "$TMP_CSV2" "$CSV_PATH"
+    else
+      echo "[$TIMESTAMP] Fallback CSV header looks OK" >> "$LOGFILE"
+    fi
+
+    # re-run sanitizer (same python snippet)
+    SANITIZED2="$CSV_PATH.sanitized2.$$"
+    NEW_KEPT=$("$PYTHON_BIN" - "$CSV_PATH" "$SANITIZED2" <<'PY' 2>>"$LOGFILE"
+import csv,sys
+infn = sys.argv[1]
+outfn = sys.argv[2]
+kept = 0
+try:
+    with open(infn, newline='', encoding='utf-8') as inf, open(outfn, 'w', newline='', encoding='utf-8') as outf:
+        reader = csv.reader(inf)
+        writer = csv.writer(outf, quoting=csv.QUOTE_ALL)
+        header = next(reader, None)
+        if header is None:
+            print(0)
+            sys.exit(0)
+        writer.writerow(['message','label'])
+        for row in reader:
+            if not row or len(row) < 2:
+                continue
+            msg = row[0].strip()
+            lbl = row[1].strip().lower()
+            if not lbl or lbl not in ('spam','ham'):
+                continue
+            low = msg.lower()
+            if 'deprecated:' in low or 'phar://' in low:
+                continue
+            writer.writerow([msg, lbl])
+            kept += 1
+    print(kept)
+except Exception:
+    print(0)
+    sys.exit(0)
+PY
+)
+    NEW_KEPT=$(echo "$NEW_KEPT" | tr -d '\r\n' || true)
+    echo "[$TIMESTAMP] Fallback sanitization kept: $NEW_KEPT" >> "$LOGFILE"
+    if [ -n "$NEW_KEPT" ] && [ "$NEW_KEPT" -gt 0 ] 2>/dev/null; then
+      mv -f "$SANITIZED2" "$CSV_PATH"
+      echo "[$TIMESTAMP] Replaced CSV with fallback-sanitized version (kept=$NEW_KEPT)" >> "$LOGFILE"
+      KEPT_COUNT=$NEW_KEPT
+    else
+      echo "[$TIMESTAMP] Fallback sanitization produced 0 rows; aborting" >> "$LOGFILE"
+      rm -f "$SANITIZED2" 2>/dev/null || true
+      exit 4
+    fi
+  else
+    echo "[$TIMESTAMP] Fallback did not produce CSV or produced empty CSV" >> "$LOGFILE"
+    exit 4
+  fi
+fi
+
 # 2) Train
 echo "[$TIMESTAMP] Training model" >> "$LOGFILE"
 cd "$ML_DIR"
