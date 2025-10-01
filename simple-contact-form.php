@@ -16,6 +16,10 @@ function scf_enqueue_scripts() {
     // 独自バリデーション用
     wp_enqueue_script('scf-validate', plugins_url('validate.js', __FILE__), ['jquery'], '1.0', true);
     wp_enqueue_style('scf-style', plugins_url('style.css', __FILE__));
+    // Cloudflare Turnstile
+    if ( get_option('scf_turnstile_enabled', 0) ) {
+        wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
+    }
 }
 add_action('wp_enqueue_scripts', 'scf_enqueue_scripts');
 
@@ -56,8 +60,23 @@ function scf_render_form($atts = []) {
         <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
         <input type="hidden" name="scf_ajax" value="1">
         <?php echo wp_nonce_field('scf_submit', 'scf_nonce', true, false); ?>
-        <!-- Cloudflare Turnstile -->
-        <div class="cf-turnstile" data-sitekey="0x4AAAAAAB4PWT_eW58sqk4P"></div>
+        <?php if ( get_option('scf_turnstile_enabled', 0) ) :
+            $sitekey = esc_attr( get_option('scf_turnstile_sitekey', '0x4AAAAAAB4PWT_eW58sqk4P') );
+        ?>
+            <div class="cf-turnstile" data-sitekey="<?php echo $sitekey; ?>" data-theme="light"></div>
+            <input type="hidden" name="cf_turnstile_token" id="cf_turnstile_token" value="">
+            <script>
+            // when turnstile callback is available it will set the token into hidden input
+            window.__scf_turnstile_callback = function(token) {
+                var el = document.getElementById('cf_turnstile_token');
+                if (el) el.value = token;
+            };
+            // support explicit render callback if needed
+            if (typeof turnstile !== 'undefined' && turnstile.render) {
+                // rendered automatically by data-sitekey, but ensure callback is set
+            }
+            </script>
+        <?php endif; ?>
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
@@ -289,10 +308,16 @@ function scf_admin_inquiry_settings_page() {
         $mail = sanitize_email($_POST['scf_support_mail']);
         $use_py = isset($_POST['scf_use_python_spam']) ? 1 : 0;
         $py_path = isset($_POST['scf_python_path']) ? sanitize_text_field($_POST['scf_python_path']) : '';
+        $turnstile_enabled = isset($_POST['scf_turnstile_enabled']) ? 1 : 0;
+        $turnstile_sitekey = isset($_POST['scf_turnstile_sitekey']) ? sanitize_text_field($_POST['scf_turnstile_sitekey']) : '';
+        $turnstile_secret = isset($_POST['scf_turnstile_secret']) ? sanitize_text_field($_POST['scf_turnstile_secret']) : '';
         update_option('scf_file_period', $period);
         update_option('scf_support_mail', $mail);
         update_option('scf_use_python_spam', $use_py);
         update_option('scf_python_path', $py_path);
+        update_option('scf_turnstile_enabled', $turnstile_enabled);
+        update_option('scf_turnstile_sitekey', $turnstile_sitekey);
+        update_option('scf_turnstile_secret', $turnstile_secret);
         echo '<div class="updated notice"><p>設定を保存しました。</p></div>';
     }
     // テスト実行ハンドラ
@@ -306,6 +331,9 @@ function scf_admin_inquiry_settings_page() {
     $mail = get_option('scf_support_mail', 'support@e-m.co.jp');
     $use_py = get_option('scf_use_python_spam', 0);
     $py_path = get_option('scf_python_path', '~/miniconda3/bin/python');
+    $turnstile_enabled = get_option('scf_turnstile_enabled', 0);
+    $turnstile_sitekey = get_option('scf_turnstile_sitekey', '0x4AAAAAAB4PWT_eW58sqk4P');
+    $turnstile_secret = get_option('scf_turnstile_secret', '0x4AAAAAAB4PWQ247r0OqYHTh3uHTDKkBmI');
     echo '<div class="wrap"><h1>お問い合わせ設定</h1>';
     echo '<form method="post">';
     wp_nonce_field('scf_settings', 'scf_settings_nonce');
@@ -314,6 +342,9 @@ function scf_admin_inquiry_settings_page() {
     echo '<tr><th>サポートメールアドレス</th><td><input type="email" name="scf_support_mail" value="'.esc_attr($mail).'" style="width:300px;"></td></tr>';
     echo '<tr><th>Pythonスパム判定を使用</th><td><label><input type="checkbox" name="scf_use_python_spam" ' . checked($use_py, 1, false) . ' /> 有効にする</label></td></tr>';
     echo '<tr><th>Python実行パス</th><td><input type="text" name="scf_python_path" value="' . esc_attr($py_path) . '" style="width:420px;" placeholder="/Users/you/miniconda3/bin/python"><p class="description">例: /Users/you/miniconda3/bin/python （~ は展開されます）</p></td></tr>';
+    echo '<tr><th>Turnstile を有効化</th><td><label><input type="checkbox" name="scf_turnstile_enabled" ' . checked($turnstile_enabled, 1, false) . ' /> 有効にする</label></td></tr>';
+    echo '<tr><th>Turnstile sitekey</th><td><input type="text" name="scf_turnstile_sitekey" value="' . esc_attr($turnstile_sitekey) . '" style="width:420px;"></td></tr>';
+    echo '<tr><th>Turnstile secret</th><td><input type="text" name="scf_turnstile_secret" value="' . esc_attr($turnstile_secret) . '" style="width:420px;"></td></tr>';
     echo '</table>';
     echo '<p><input type="submit" class="button-primary" value="保存"></p>';
     echo '</form>';
@@ -592,6 +623,34 @@ add_action('init', function() {
         if (empty($_POST['scf_nonce']) || !wp_verify_nonce($_POST['scf_nonce'], 'scf_submit')) {
             wp_send_json_error(['message' => '無効なリクエストです。']);
             exit;
+        }
+        // Cloudflare Turnstile server-side verification (when enabled)
+        if ( get_option('scf_turnstile_enabled', 0) ) {
+            $token = isset($_POST['cf_turnstile_token']) ? trim($_POST['cf_turnstile_token']) : '';
+            $secret = trim(get_option('scf_turnstile_secret', '0x4AAAAAAB4PWQ247r0OqYHTh3uHTDKkBmI'));
+            if ($token === '') {
+                wp_send_json_error(['message' => 'Turnstile の検証が必要です。']);
+                exit;
+            }
+            // validate with Cloudflare
+            $resp = wp_remote_post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                'body' => [
+                    'secret' => $secret,
+                    'response' => $token,
+                    'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '',
+                ],
+                'timeout' => 10,
+            ]);
+            if ( is_wp_error($resp) ) {
+                wp_send_json_error(['message' => 'Turnstile の検証に失敗しました（通信エラー）。']);
+                exit;
+            }
+            $body = wp_remote_retrieve_body($resp);
+            $data = json_decode($body, true);
+            if ( empty($data) || empty($data['success']) || $data['success'] !== true ) {
+                wp_send_json_error(['message' => 'Turnstile の検証に失敗しました。']);
+                exit;
+            }
         }
     $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
         $errors = [];
