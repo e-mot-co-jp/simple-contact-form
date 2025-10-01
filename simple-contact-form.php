@@ -60,6 +60,12 @@ function scf_render_form($atts = []) {
         <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
         <input type="hidden" name="scf_ajax" value="1">
         <?php echo wp_nonce_field('scf_submit', 'scf_nonce', true, false); ?>
+        <!-- 注意事項 / 同意 -->
+        <div class="scf-notice" style="border:1px solid #ddd;padding:12px;margin:12px 0;background:#fafafa;">
+            <h3>注意事項</h3>
+            <p>ご記入いただいたEメールアドレスに誤りがある場合や携帯電話のアドレス、システム障害等により弊社からの回答を送信できない場合があります。迷惑メールフィルターを設定している場合は、返信を受け取れない可能性がございますので、e-mot.co.jpからのメールを例外登録していただきますようお願いいたします。Eメールの特性上、送信過程で生じるメール内容の欠落や送信遅延、ウイルスの混入等の不具合に関して弊社は一切の責任を負いかねますのであらかじめご了承ください。こちらは一般ユーザーの方の為のお問い合わせフォームです。法人の方からのお問い合わせ、売込み、営業につきましては一律破棄されます。こちらの問い合わせフォームはSSL通信によって暗号化され保護されています。お客様からご提供いただいた個人情報は当社の個人情報保護方針に従い、お客様のお問い合わせ内容を確認し、ご回答するために利用することを目的としています。下記にご記入の前に、「プライバシーポリシー」、「サイトポリシー」 を御覧ください。送信された場合は、こちらに同意したこととなりますのでご了承ください。５営業日を過ぎても返信がない場合はお手数ですがお電話にてご連絡ください。ユーザーサポートダイヤル：0256-64-8282</p>
+            <p style="margin-top:8px;"><label><input type="checkbox" name="scf_agree" value="1"> 注意事項をご確認・同意いただきます（チェックしてください）。</label></p>
+        </div>
         <?php if ( get_option('scf_turnstile_enabled', 0) ) :
             $sitekey = esc_attr( get_option('scf_turnstile_sitekey', '0x4AAAAAAB4PWT_eW58sqk4P') );
         ?>
@@ -77,6 +83,8 @@ function scf_render_form($atts = []) {
             }
             </script>
         <?php endif; ?>
+        
+
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
@@ -652,12 +660,16 @@ add_action('init', function() {
                 exit;
             }
         }
-    $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
+        $required = ['scf_name','scf_email','scf_email_confirm','scf_zip','scf_address','scf_tel','scf_inquiry','scf_product','scf_content'];
         $errors = [];
         foreach ($required as $key) {
             if (empty($_POST[$key])) {
                 $errors[] = $key . 'は必須です。';
             }
+        }
+        // agreement checkbox required
+        if ( empty($_POST['scf_agree']) || $_POST['scf_agree'] != '1' ) {
+            $errors[] = '注意事項に同意いただく必要があります。';
         }
         if ($_POST['scf_email'] !== $_POST['scf_email_confirm']) {
             $errors[] = 'メールアドレスが一致しません。';
