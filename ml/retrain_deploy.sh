@@ -82,7 +82,37 @@ else
 fi
 
 # Ensure CSV has header row expected by train_tfidf_lr.py
+# Quick pre-filter: remove rows with empty label or completely empty rows (fix leading "","" case)
 if [ -s "$CSV_PATH" ]; then
+  PREF_OUT="$CSV_PATH.pref.$$"
+  echo "[$TIMESTAMP] Running quick prefilter to remove empty-label rows" >> "$LOGFILE"
+  "$PYTHON_BIN" - "$CSV_PATH" "$PREF_OUT" <<'PY' 2>>"$LOGFILE" || true
+import csv,sys
+infn=sys.argv[1]
+outfn=sys.argv[2]
+try:
+    with open(infn,newline='',encoding='utf-8') as inf, open(outfn,'w',newline='',encoding='utf-8') as outf:
+        rdr=csv.reader(inf)
+        w=csv.writer(outf,quoting=csv.QUOTE_ALL)
+        for row in rdr:
+            if not row:
+                continue
+            # keep rows that have at least two columns and non-empty label
+            if len(row) >= 2 and row[1].strip() != '':
+                w.writerow(row)
+except Exception:
+    # fallback: do nothing
+    pass
+PY
+  # if prefilter produced non-empty file, replace
+  if [ -s "$PREF_OUT" ]; then
+    mv -f "$PREF_OUT" "$CSV_PATH"
+    echo "[$TIMESTAMP] Prefilter replaced CSV (removed empty-label rows)" >> "$LOGFILE"
+  else
+    rm -f "$PREF_OUT" 2>/dev/null || true
+  fi
+
+  
   first_line="$(head -n 1 "$CSV_PATH" | tr -d '\r' | tr -d '\n' | sed -e 's/^\s*//')"
   echo "[$TIMESTAMP] CSV first line: $first_line" >> "$LOGFILE"
   # crude check: if header doesn't contain message or text, prepend header
