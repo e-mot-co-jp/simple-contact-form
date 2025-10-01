@@ -115,9 +115,28 @@ PY
   
   first_line="$(head -n 1 "$CSV_PATH" | tr -d '\r' | tr -d '\n' | sed -e 's/^\s*//')"
   echo "[$TIMESTAMP] CSV first line: $first_line" >> "$LOGFILE"
-  # crude check: if header doesn't contain message or text, prepend header
-  echo "$first_line" | tr '[:upper:]' '[:lower:]' | grep -Eq 'message|text|label|class'
-  if [ $? -ne 0 ]; then
+  # robust header check using Python csv.reader to handle BOM/quotes
+  HEADER_OK=$("$PYTHON_BIN" - "$CSV_PATH" <<'PY' 2>>"$LOGFILE" || true
+import csv,sys
+path=sys.argv[1]
+try:
+    with open(path, newline='', encoding='utf-8') as f:
+        rdr=csv.reader(f)
+        row=next(rdr, None)
+        if not row:
+            print('NO')
+            sys.exit(0)
+        # normalize fields
+        norm=[c.strip().lower().lstrip('\ufeff').strip('"') for c in row]
+        has_msg = any(x in ('message','text') for x in norm)
+        has_label = any(x in ('label','class') for x in norm)
+        print('YES' if (has_msg and has_label) else 'NO')
+except Exception:
+    print('NO')
+PY
+)
+  HEADER_OK=$(echo "$HEADER_OK" | tr -d '\r\n' || true)
+  if [ "$HEADER_OK" != "YES" ]; then
     echo "[$TIMESTAMP] CSV appears to lack header; prepending \"message,label\"" >> "$LOGFILE"
     TMP_CSV="$CSV_PATH.tmp.$$"
     printf '"message","label"\n' > "$TMP_CSV"
@@ -207,8 +226,27 @@ if [ -z "$KEPT_COUNT" ] || [ "$KEPT_COUNT" -eq 0 ] 2>/dev/null; then
     echo "[$TIMESTAMP] Fallback CSV generated; ensuring header and sanitizing" >> "$LOGFILE"
     first_line2="$(head -n 1 "$CSV_PATH" | tr -d '\r' | tr -d '\n' | sed -e 's/^\s*//')"
     echo "[$TIMESTAMP] Fallback CSV first line: $first_line2" >> "$LOGFILE"
-    echo "$first_line2" | tr '[:upper:]' '[:lower:]' | grep -Eq 'message|text|label|class'
-    if [ $? -ne 0 ]; then
+    # robust header check for fallback CSV
+    HEADER_OK2=$("$PYTHON_BIN" - "$CSV_PATH" <<'PY' 2>>"$LOGFILE" || true
+import csv,sys
+path=sys.argv[1]
+try:
+    with open(path, newline='', encoding='utf-8') as f:
+        rdr=csv.reader(f)
+        row=next(rdr, None)
+        if not row:
+            print('NO')
+            sys.exit(0)
+        norm=[c.strip().lower().lstrip('\ufeff').strip('"') for c in row]
+        has_msg = any(x in ('message','text') for x in norm)
+        has_label = any(x in ('label','class') for x in norm)
+        print('YES' if (has_msg and has_label) else 'NO')
+except Exception:
+    print('NO')
+PY
+)
+    HEADER_OK2=$(echo "$HEADER_OK2" | tr -d '\r\n' || true)
+    if [ "$HEADER_OK2" != "YES" ]; then
       echo "[$TIMESTAMP] Fallback CSV lacks header; prepending header" >> "$LOGFILE"
       TMP_CSV2="$CSV_PATH.tmp.$$"
       printf '"message","label"\n' > "$TMP_CSV2"
