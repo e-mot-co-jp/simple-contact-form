@@ -20,6 +20,7 @@ import joblib
 
 
 def load_df(path):
+    # Try to read CSV with header first
     df = pd.read_csv(path)
     # allow alternative column names
     if 'message' not in df.columns:
@@ -28,8 +29,24 @@ def load_df(path):
     if 'label' not in df.columns:
         if 'class' in df.columns:
             df = df.rename(columns={'class': 'label'})
+
+    # If still missing required columns, try to read as headerless CSV
     if 'message' not in df.columns or 'label' not in df.columns:
-        raise ValueError("CSV must contain 'message' and 'label' columns (or 'text'/'class')")
+        # attempt to parse without header and use first two columns as (message,label)
+        # This helps when WP-CLI or other exporters drop headers.
+        try:
+            df_no_header = pd.read_csv(path, header=None)
+        except Exception:
+            raise ValueError("CSV must contain 'message' and 'label' columns (or 'text'/'class') and be readable as CSV")
+
+        if df_no_header.shape[1] >= 2:
+            # map first two columns to message,label
+            df = df_no_header.iloc[:, 0:2].copy()
+            df.columns = ['message', 'label']
+            print("Warning: input CSV had no header — treating first two columns as 'message','label'", file=sys.stderr)
+        else:
+            raise ValueError("CSV must contain at least two columns (message,label)")
+
     return df
 
 
