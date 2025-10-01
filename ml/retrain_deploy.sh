@@ -308,6 +308,18 @@ PY
 fi
 
 # 2) Train
+# Log Python and scikit-learn versions for reproducibility debugging
+echo "[$TIMESTAMP] Python executable: $PYTHON_BIN" >> "$LOGFILE"
+"$PYTHON_BIN" - <<'PY' >>"$LOGFILE" 2>&1 || true
+import sys
+print('python_executable', sys.executable)
+try:
+  import sklearn
+  print('sklearn_version', sklearn.__version__)
+except Exception as e:
+  print('sklearn_version_error', e)
+PY
+
 echo "[$TIMESTAMP] Training model" >> "$LOGFILE"
 cd "$ML_DIR"
 "$PYTHON_BIN" "$TRAIN_SCRIPT" --input "$CSV_PATH" --output "$NEW_MODEL" >> "$LOGFILE" 2>&1 || { echo "[$TIMESTAMP] ERROR: training failed" >> "$LOGFILE"; exit 5; }
