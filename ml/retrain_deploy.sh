@@ -98,6 +98,51 @@ if [ -s "$CSV_PATH" ]; then
   fi
 fi
 
+# Sanitize CSV: remove rows without valid label and filter out PHP/WP-CLI noise lines
+echo "[$TIMESTAMP] Sanitizing CSV (filter spam/ham rows, remove deprecated noise)" >> "$LOGFILE"
+SANITIZED="$CSV_PATH.sanitized.$$"
+KEPT_COUNT=$("$PYTHON_BIN" - "$CSV_PATH" "$SANITIZED" <<'PY' 2>>"$LOGFILE"
+import csv,sys
+infn = sys.argv[1]
+outfn = sys.argv[2]
+kept = 0
+try:
+  with open(infn, newline='', encoding='utf-8') as inf, open(outfn, 'w', newline='', encoding='utf-8') as outf:
+    reader = csv.reader(inf)
+    writer = csv.writer(outf, quoting=csv.QUOTE_ALL)
+    header = next(reader, None)
+    if header is None:
+      print(0)
+      sys.exit(0)
+    writer.writerow(['message','label'])
+    for row in reader:
+      if not row or len(row) < 2:
+        continue
+      msg = row[0].strip()
+      lbl = row[1].strip().lower()
+      if not lbl or lbl not in ('spam','ham'):
+        continue
+      low = msg.lower()
+      if 'deprecated:' in low or 'phar://' in low:
+        continue
+      writer.writerow([msg, lbl])
+      kept += 1
+  print(kept)
+except Exception:
+  print(0)
+  sys.exit(0)
+PY
+)
+KEPT_COUNT=$(echo "$KEPT_COUNT" | tr -d '\r\n' || true)
+echo "[$TIMESTAMP] Sanitization produced rows kept: $KEPT_COUNT" >> "$LOGFILE"
+if [ -n "$KEPT_COUNT" ] && [ "$KEPT_COUNT" -gt 0 ] 2>/dev/null; then
+  mv -f "$SANITIZED" "$CSV_PATH"
+  echo "[$TIMESTAMP] Replaced CSV with sanitized version (kept=$KEPT_COUNT)" >> "$LOGFILE"
+else
+  echo "[$TIMESTAMP] Sanitization resulted in 0 rows; leaving original CSV in place" >> "$LOGFILE"
+  rm -f "$SANITIZED" 2>/dev/null || true
+fi
+
 # Quick sanity
 if [ ! -s "$CSV_PATH" ]; then
   echo "[$TIMESTAMP] ERROR: CSV export failed or empty" >> "$LOGFILE"
