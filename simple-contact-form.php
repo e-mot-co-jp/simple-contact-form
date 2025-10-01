@@ -63,7 +63,7 @@ function scf_render_form($atts = []) {
         <!-- 注意事項 / 同意 -->
         <div class="scf-notice" style="border:1px solid #ddd;padding:12px;margin:12px 0;background:#fafafa;">
             <h3>注意事項</h3>
-            <ul style="margin-left:1.5em;"></ul>
+            <ul style="margin-left:1.5em;">
                 <li>ご記入いただいたEメールアドレスに誤りがある場合や携帯電話のアドレス、システム障害等により弊社からの回答を送信できない場合があります。</li>
                 <li>迷惑メールフィルターを設定している場合は、返信を受け取れない可能性がございますので、e-mot.co.jpからのメールを例外登録していただきますようお願いいたします。</li>
                 <li>Eメールの特性上、送信過程で生じるメール内容の欠落や送信遅延、ウイルスの混入等の不具合に関して弊社は一切の責任を負いかねますのであらかじめご了承ください。</li>
