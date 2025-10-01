@@ -56,6 +56,7 @@ function scf_render_form($atts = []) {
         <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
         <input type="hidden" name="scf_ajax" value="1">
         <?php echo wp_nonce_field('scf_submit', 'scf_nonce', true, false); ?>
+        <?php echo do_shortcode('[turnstile]'); ?>
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
