@@ -56,9 +56,8 @@ function scf_render_form($atts = []) {
         <label><span class="scf-required">必須</span>内容<br><textarea name="scf_content" required></textarea></label><br>
         <input type="hidden" name="scf_ajax" value="1">
         <?php echo wp_nonce_field('scf_submit', 'scf_nonce', true, false); ?>
-        <?php if( function_exists('turnstile') ) {
-            turnstile(); // フォームに Turnstile ウィジェットを表示
-        } ?>
+        <!-- Cloudflare Turnstile -->
+        <div class="cf-turnstile" data-sitekey="0x4AAAAAAB4PWT_eW58sqk4P"></div>
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
