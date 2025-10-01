@@ -312,13 +312,35 @@ echo "[$TIMESTAMP] Training model" >> "$LOGFILE"
 cd "$ML_DIR"
 "$PYTHON_BIN" "$TRAIN_SCRIPT" --input "$CSV_PATH" --output "$NEW_MODEL" >> "$LOGFILE" 2>&1 || { echo "[$TIMESTAMP] ERROR: training failed" >> "$LOGFILE"; exit 5; }
 
+# Save current venv's pip freeze to requirements for reproducibility
+REQ_FILE="$ML_DIR/requirements.txt"
+if "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+  "$PYTHON_BIN" -m pip freeze > "$REQ_FILE" 2>>"$LOGFILE" || true
+  echo "[$TIMESTAMP] Saved pip freeze to $REQ_FILE" >> "$LOGFILE"
+fi
+
+# Run smoke tests on the newly trained model before deploying
+echo "[$TIMESTAMP] Running smoke tests on new model" >> "$LOGFILE"
+if [ -f "$ML_DIR/check_model_smoke.py" ]; then
+  "$PYTHON_BIN" "$ML_DIR/check_model_smoke.py" --model "$NEW_MODEL" >> "$LOGFILE" 2>&1 || { echo "[$TIMESTAMP] ERROR: smoke test failed; aborting deploy" >> "$LOGFILE"; exit 7; }
+  echo "[$TIMESTAMP] Smoke tests passed" >> "$LOGFILE"
+else
+  echo "[$TIMESTAMP] No smoke test script found; skipping smoke tests" >> "$LOGFILE"
+fi
+
 # 3) Deploy atomically
 if [ -f "$NEW_MODEL" ]; then
   TMP_DEPLOY="$DEPLOY_TARGET.tmp.$(date +%s)"
   cp -v "$NEW_MODEL" "$TMP_DEPLOY" >> "$LOGFILE" 2>&1
   mv -v "$TMP_DEPLOY" "$DEPLOY_TARGET" >> "$LOGFILE" 2>&1
   chmod 644 "$DEPLOY_TARGET"
-  echo "[$TIMESTAMP] Deployed model to $DEPLOY_TARGET" >> "$LOGFILE"
+  # compute sha256 if available and log it
+  if command -v sha256sum >/dev/null 2>&1; then
+    SHA=$(sha256sum "$DEPLOY_TARGET" | awk '{print $1}')
+    echo "[$TIMESTAMP] Deployed model to $DEPLOY_TARGET (sha256=$SHA)" >> "$LOGFILE"
+  else
+    echo "[$TIMESTAMP] Deployed model to $DEPLOY_TARGET" >> "$LOGFILE"
+  fi
 else
   echo "[$TIMESTAMP] ERROR: new model not found" >> "$LOGFILE"
   exit 6
