@@ -81,6 +81,23 @@ else
   mysql -u "$DB_USER" -p"$DB_PASS" -h "$DB_HOST" -e "SELECT message, class FROM spam_list" "$DB_NAME" | awk -F '\t' 'BEGIN{OFS=","}{gsub(/\"/,"\"\"",$0); print "\""$1"\",\""$2"\""}' > "$CSV_PATH"
 fi
 
+# Ensure CSV has header row expected by train_tfidf_lr.py
+if [ -s "$CSV_PATH" ]; then
+  first_line="$(head -n 1 "$CSV_PATH" | tr -d '\r' | tr -d '\n' | sed -e 's/^\s*//')"
+  echo "[$TIMESTAMP] CSV first line: $first_line" >> "$LOGFILE"
+  # crude check: if header doesn't contain message or text, prepend header
+  echo "$first_line" | tr '[:upper:]' '[:lower:]' | grep -Eq 'message|text|label|class'
+  if [ $? -ne 0 ]; then
+    echo "[$TIMESTAMP] CSV appears to lack header; prepending \"message,label\"" >> "$LOGFILE"
+    TMP_CSV="$CSV_PATH.tmp.$$"
+    printf '"message","label"\n' > "$TMP_CSV"
+    cat "$CSV_PATH" >> "$TMP_CSV"
+    mv "$TMP_CSV" "$CSV_PATH"
+  else
+    echo "[$TIMESTAMP] CSV header looks OK" >> "$LOGFILE"
+  fi
+fi
+
 # Quick sanity
 if [ ! -s "$CSV_PATH" ]; then
   echo "[$TIMESTAMP] ERROR: CSV export failed or empty" >> "$LOGFILE"
