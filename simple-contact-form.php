@@ -995,26 +995,42 @@ function scf_register_form_shortcode($atts) {
         $secret = scf_get_turnstile_secret();
         if ($secret) {
             $token = '';
-            foreach (['cf-turnstile-response','cf_turnstile_response','turnstile-response','cf_turnstile_token','cf_turnstile_token','cf_turnstile_token','scf_reg_turnstile_token'] as $k) {
+            // Cloudflare 推奨 name 属性: cf-turnstile-response （data-sitekeyと併用）
+            $candidate_keys = [
+                'cf-turnstile-response', // 標準
+                'cf_turnstile_response', // 破壊的置換対策
+                'turnstile-response',
+                'cf_turnstile_token',
+                'scf_reg_turnstile_token',
+            ];
+            foreach ($candidate_keys as $k) {
                 if (isset($_POST[$k]) && $_POST[$k] !== '') { $token = sanitize_text_field($_POST[$k]); break; }
             }
             if (!$token) {
                 $errors[] = __('Turnstile の検証トークンが見つかりませんでした。', 'simple-contact-form');
             } else {
+                $body_args = [
+                    'secret' => $secret,
+                    'response' => $token,
+                ];
+                // remoteip は必須ではない。CDN 経由等で失敗するケースがあり一旦送信しない。
                 $resp = wp_remote_post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-                    'timeout' => 10,
-                    'body' => [
-                        'secret' => $secret,
-                        'response' => $token,
-                        'remoteip' => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',
-                    ]
+                    'timeout' => 15,
+                    'body' => $body_args,
                 ]);
                 if (is_wp_error($resp)) {
-                    $errors[] = __('Turnstile の検証に失敗しました。', 'simple-contact-form');
+                    $errors[] = __('Turnstile の検証に失敗しました。 (通信エラー)', 'simple-contact-form');
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('[SCF Turnstile] HTTP error: ' . $resp->get_error_message());
+                    }
                 } else {
                     $body = json_decode(wp_remote_retrieve_body($resp), true);
-                    if (empty($body) || empty($body['success'])) {
+                    $success = isset($body['success']) ? (bool)$body['success'] : false;
+                    if (!$success) {
                         $errors[] = __('Turnstile の検証に失敗しました。', 'simple-contact-form');
+                        if (defined('WP_DEBUG') && WP_DEBUG) {
+                            error_log('[SCF Turnstile] Verification failed: ' . wp_json_encode($body));
+                        }
                     }
                 }
             }
