@@ -860,3 +860,232 @@ add_action('init', function() {
         exit;
     }
 });
+
+/**
+ * =============================
+ * User Login / Registration (migrated from theme functions.php)
+ * =============================
+ * Provides shortcodes:
+ *  - [scf_login_form] (alias: [mot_login_form])
+ *  - [scf_register_form] (alias: [mot_register_form])
+ * Adds redirect for logged-in users visiting /login/ or /register/ paths.
+ * Uses existing Turnstile options: scf_turnstile_enabled, scf_turnstile_sitekey, scf_turnstile_secret.
+ */
+
+// Redirect logged-in users away from auth pages
+function scf_redirect_logged_in_from_auth_pages() {
+    if ( is_admin() || wp_doing_ajax() || ( defined('DOING_CRON') && DOING_CRON ) ) return;
+    if ( defined('REST_REQUEST') && REST_REQUEST ) return;
+    if ( ! is_user_logged_in() ) return;
+    $request = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+    if ($request === '') return;
+    $path = strtok($request, '?');
+    $path = rtrim($path, '/') . '/';
+    $targets = ['/login/','/register/','/wp-login.php'];
+    foreach ($targets as $t) {
+        if (strpos($path, $t) !== false) {
+            $dest = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/');
+            wp_safe_redirect($dest);
+            exit;
+        }
+    }
+}
+add_action('template_redirect', 'scf_redirect_logged_in_from_auth_pages', 1);
+
+// Helper: Turnstile sitekey
+function scf_get_turnstile_sitekey() {
+    if (!get_option('scf_turnstile_enabled', 0)) return '';
+    return trim(get_option('scf_turnstile_sitekey', ''));
+}
+function scf_get_turnstile_secret() {
+    if (!get_option('scf_turnstile_enabled', 0)) return '';
+    return trim(get_option('scf_turnstile_secret', ''));
+}
+
+// Social login rendering (Nextend) if available
+function scf_render_social_login_block() {
+    if (shortcode_exists('nextend_social_login')) {
+        return '<div class="scf-nextend-social-login">' . do_shortcode('[nextend_social_login]') . '</div>';
+    }
+    return '';
+}
+
+// Login form shortcode
+function scf_login_form_shortcode($atts) {
+    if (is_user_logged_in()) {
+        return '<p>' . esc_html__('ログイン中です。', 'simple-contact-form') . '</p>';
+    }
+    $redirect = isset($_GET['redirect_to']) ? esc_url_raw($_GET['redirect_to']) : ( function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/') );
+    $args = [
+        'redirect' => $redirect,
+        'label_username' => __('Email or username', 'simple-contact-form'),
+        'label_log_in' => __('ログイン', 'simple-contact-form'),
+    ];
+    ob_start();
+    echo scf_render_social_login_block();
+    wp_login_form($args);
+    return ob_get_clean();
+}
+add_shortcode('scf_login_form', 'scf_login_form_shortcode');
+add_shortcode('mot_login_form', 'scf_login_form_shortcode'); // backward compatibility
+
+// Registration form shortcode
+function scf_register_form_shortcode($atts) {
+    if (is_user_logged_in()) {
+        return '<p>' . esc_html__('ログイン中です。', 'simple-contact-form') . '</p>';
+    }
+    $errors = [];
+    if ('POST' === $_SERVER['REQUEST_METHOD'] && isset($_POST['scf_register_nonce']) && wp_verify_nonce($_POST['scf_register_nonce'], 'scf_register')) {
+        $email = isset($_POST['scf_email']) ? sanitize_email($_POST['scf_email']) : '';
+        $username = isset($_POST['scf_username']) ? sanitize_user($_POST['scf_username']) : '';
+        $password = isset($_POST['scf_password']) ? $_POST['scf_password'] : '';
+        if (empty($email) || !is_email($email)) $errors[] = __('有効なメールアドレスを入力してください。', 'simple-contact-form');
+        if (empty($password) || strlen($password) < 6) $errors[] = __('パスワードは6文字以上必要です。', 'simple-contact-form');
+        if (empty($username) && $email) {
+            $username = sanitize_user(current(explode('@', $email)), true);
+        }
+        // Turnstile verification (if enabled)
+        $secret = scf_get_turnstile_secret();
+        if ($secret) {
+            $token = '';
+            foreach (['cf-turnstile-response','cf_turnstile_response','turnstile-response'] as $k) {
+                if (isset($_POST[$k]) && $_POST[$k] !== '') { $token = sanitize_text_field($_POST[$k]); break; }
+            }
+            if (!$token) {
+                $errors[] = __('Turnstile の検証トークンが見つかりませんでした。', 'simple-contact-form');
+            } else {
+                $resp = wp_remote_post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                    'timeout' => 10,
+                    'body' => [
+                        'secret' => $secret,
+                        'response' => $token,
+                        'remoteip' => isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '',
+                    ]
+                ]);
+                if (is_wp_error($resp)) {
+                    $errors[] = __('Turnstile の検証に失敗しました。', 'simple-contact-form');
+                } else {
+                    $body = json_decode(wp_remote_retrieve_body($resp), true);
+                    if (empty($body) || empty($body['success'])) {
+                        $errors[] = __('Turnstile の検証に失敗しました。', 'simple-contact-form');
+                    }
+                }
+            }
+        }
+        if (empty($errors)) {
+            if (function_exists('wc_create_new_customer')) {
+                $user_id = wc_create_new_customer($email, $username, $password);
+                if (is_wp_error($user_id)) {
+                    $errors[] = $user_id->get_error_message();
+                } else {
+                    wp_set_current_user($user_id);
+                    wp_set_auth_cookie($user_id);
+                    do_action('wp_login', $username);
+                    wp_safe_redirect(function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/'));
+                    exit;
+                }
+            } else {
+                $errors[] = __('WooCommerce functions not available.', 'simple-contact-form');
+            }
+        }
+    }
+    ob_start();
+    if (!empty($errors)) {
+        echo '<div class="scf-register-errors">';
+        foreach ($errors as $e) echo '<p class="scf-error">' . esc_html($e) . '</p>';
+        echo '</div>';
+    }
+    echo scf_render_social_login_block();
+    $sitekey = scf_get_turnstile_sitekey();
+    ?>
+    <form method="post" class="scf-register-form">
+        <?php wp_nonce_field('scf_register', 'scf_register_nonce'); ?>
+        <p>
+            <label for="scf_email"><?php esc_html_e('Email', 'simple-contact-form'); ?></label><br>
+            <input type="email" name="scf_email" id="scf_email" required value="<?php echo esc_attr(isset($_POST['scf_email']) ? $_POST['scf_email'] : ''); ?>">
+        </p>
+        <p>
+            <label for="scf_username"><?php esc_html_e('Username (optional)', 'simple-contact-form'); ?></label><br>
+            <input type="text" name="scf_username" id="scf_username" value="<?php echo esc_attr(isset($_POST['scf_username']) ? $_POST['scf_username'] : ''); ?>">
+        </p>
+        <p>
+            <label for="scf_password"><?php esc_html_e('Password', 'simple-contact-form'); ?></label><br>
+            <input type="password" name="scf_password" id="scf_password" required>
+        </p>
+        <?php if ($sitekey) : ?>
+            <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>"></div>
+        <?php endif; ?>
+        <p><button type="submit"><?php esc_html_e('登録', 'simple-contact-form'); ?></button></p>
+    </form>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('scf_register_form', 'scf_register_form_shortcode');
+add_shortcode('mot_register_form', 'scf_register_form_shortcode'); // backward compatibility
+
+/**
+ * Redirect non-logged users visiting My Account to custom /login/ page with redirect_back param.
+ * (Migrated from theme)
+ */
+function scf_redirect_myaccount_to_custom_login(){
+    if ( function_exists('is_account_page') && is_account_page() && ! is_user_logged_in() ) {
+        $login_slug = '/login/';
+        $register_slug = '/register/';
+        $request = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+        if ( strpos($request, $login_slug) !== false || strpos($request, $register_slug) !== false ) {
+            return; // already on login/register page
+        }
+        $login_page = home_url($login_slug);
+        $redirect_to = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/');
+        $url = add_query_arg('redirect_to', rawurlencode($redirect_to), $login_page);
+        wp_safe_redirect($url);
+        exit;
+    }
+}
+add_action('template_redirect', 'scf_redirect_myaccount_to_custom_login', 5);
+
+/**
+ * Social login rendering (shared) - already have scf_render_social_login_block for forms.
+ * This block adds insertion into WooCommerce login and checkout login forms (migrated from theme).
+ */
+function scf_print_nextend_social_login(){
+    if (shortcode_exists('nextend_social_login')) {
+        echo '<div class="scf-nextend-social-login">' . do_shortcode('[nextend_social_login]') . '</div>';
+    }
+}
+add_action('woocommerce_login_form_end', 'scf_print_nextend_social_login');
+add_action('woocommerce_checkout_login_form', 'scf_print_nextend_social_login');
+
+// Inline styles for social login layout (migrated)
+function scf_nextend_styles(){
+    $css = ' .scf-nextend-social-login{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:.6rem;text-align:center;max-width:100%;box-sizing:border-box;margin:0 auto 1rem}'
+        .' .scf-nextend-social-login a,.scf-nextend-social-login button,.scf-nextend-social-login .nsl-button{width:auto!important;margin:2.5px auto!important;white-space:normal!important}'
+        .' .scf-nextend-social-login img{max-width:100%;height:auto;display:block}';
+    if ( wp_style_is('hello-elementor-child-style','enqueued') || wp_style_is('hello-elementor-child-style','registered') ) {
+        wp_add_inline_style('hello-elementor-child-style', $css);
+    } else {
+        add_action('wp_head', function() use ($css){ echo '<style>'.$css.'</style>'; }, 100);
+    }
+}
+add_action('wp_enqueue_scripts', 'scf_nextend_styles', 30);
+
+/**
+ * SiteGuard CAPTCHA insertion on WooCommerce login form (migrated from theme)
+ */
+function scf_siteguard_captcha_login(){
+    if ( ! function_exists( 'is_account_page' ) || ! is_account_page() ) {
+        return;
+    }
+    global $siteguard_captcha, $siteguard_config;
+    if ( isset( $siteguard_captcha ) && is_object( $siteguard_captcha )
+        && method_exists( $siteguard_captcha, 'handler_login_form' )
+        && isset( $siteguard_config )
+        && '1' === $siteguard_config->get( 'captcha_enable' )
+        && '0' !== $siteguard_config->get( 'captcha_login' ) ) {
+        ob_start();
+        $siteguard_captcha->handler_login_form();
+        echo ob_get_clean();
+    }
+}
+add_action('woocommerce_login_form', 'scf_siteguard_captcha_login', 20);
+
