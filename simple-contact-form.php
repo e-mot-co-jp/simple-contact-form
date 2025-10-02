@@ -1078,7 +1078,8 @@ function scf_register_form_shortcode($atts) {
                     }
                     wp_set_current_user($user_id);
                     wp_set_auth_cookie($user_id);
-                    do_action('wp_login', $username);
+                    $scf_user_obj = get_user_by('id', $user_id);
+                    do_action('wp_login', $username, $scf_user_obj);
                     wp_safe_redirect(function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/'));
                     exit;
                 }
