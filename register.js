@@ -61,14 +61,31 @@
     if(!$msg.length){
       $msg = $('<p class="scf-pw-threshold-msg" style="margin:6px 0 0;font-size:12px;color:#c00;display:none;"></p>').insertAfter('.scf-password-helper');
     }
+    // 未達成要件を抽出し人間可読メッセージへ
+    function unmetList(){
+      var map = {
+        length: '8文字以上',
+        upper: '英大文字',
+        lower: '英小文字',
+        digit: '数字',
+        symbol: '記号',
+        match: '確認用と一致'
+      };
+      var arr = [];
+      Object.keys(map).forEach(function(k){ if(!rules[k]) arr.push(map[k]); });
+      if(!arr.length) return '';
+      return ' 未達: ' + arr.join(' / ');
+    }
     if(requiredScore > 0){
       if(score < requiredScore){
         $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
-        $msg.text('パスワード強度が不足しています (必要: '+requiredScore+' / 現在: '+score+')').show();
+        var base = 'パスワード強度が不足しています (必要: '+requiredScore+' / 現在: '+score+')';
+        var details = unmetList();
+        $msg.text(base + details).show();
       } else if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)) {
         // 形式要件未達の場合も送信不可（明示メッセージ）
         $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
-        $msg.text('パスワード要件をすべて満たしてください。').show();
+        $msg.text('パスワード要件をすべて満たしてください。' + unmetList()).show();
       } else {
         $btn.prop('disabled', false).css({opacity:1,cursor:'pointer'});
         $msg.hide();
@@ -77,7 +94,7 @@
       // 閾値無効時も形式要件満たすまで無効にするか迷うが現状は許可
       if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)) {
         $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
-        $msg.text('パスワード要件をすべて満たしてください。').show();
+        $msg.text('パスワード要件をすべて満たしてください。' + unmetList()).show();
       } else {
         $btn.prop('disabled', false).css({opacity:1,cursor:'pointer'});
         $msg.hide();
