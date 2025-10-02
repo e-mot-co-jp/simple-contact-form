@@ -1,5 +1,13 @@
 (function($){
+  var shown = false;
+  function ensureShow(){
+    if(!shown){
+      $('.scf-password-helper').fadeIn(150);
+      shown = true;
+    }
+  }
   function evaluate(){
+    ensureShow();
     var p = $('#scf_password').val() || '';
     var c = $('#scf_password_confirm').val() || '';
     var rules = {
@@ -35,7 +43,6 @@
     if(typeof zxcvbn === 'function'){
       try { score = zxcvbn(p).score; } catch(e){ score = 0; }
     } else {
-      // 簡易フォールバック: 条件数ベース
       var s=0; if(/[A-Z]/.test(p)) s++; if(/[a-z]/.test(p)) s++; if(/\d/.test(p)) s++; if(/[^A-Za-z0-9]/.test(p)) s++; if(p.length>=12) s++; score = Math.min(4, Math.floor(s/5*4));
     }
     var widths = ['20%','40%','60%','80%','100%'];
@@ -45,6 +52,7 @@
     if($text.length) $text.text('強度: ' + (labels[score] || '-'));
   }
 
+  $(document).on('focus','#scf_password,#scf_password_confirm', ensureShow);
   $(document).on('input','#scf_password,#scf_password_confirm', evaluate);
-  $(function(){ evaluate(); });
+  $(function(){ if($('#scf_password').val() || $('#scf_password_confirm').val()){ ensureShow(); evaluate(); } });
 })(jQuery);

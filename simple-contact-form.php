@@ -96,19 +96,12 @@ function scf_render_form($atts = []) {
             <div class="cf-turnstile" data-sitekey="<?php echo $sitekey; ?>" data-theme="light"></div>
             <input type="hidden" name="cf_turnstile_token" id="cf_turnstile_token" value="">
             <script>
-            // when turnstile callback is available it will set the token into hidden input
             window.__scf_turnstile_callback = function(token) {
                 var el = document.getElementById('cf_turnstile_token');
                 if (el) el.value = token;
             };
-            // support explicit render callback if needed
-            if (typeof turnstile !== 'undefined' && turnstile.render) {
-                // rendered automatically by data-sitekey, but ensure callback is set
-            }
             </script>
         <?php endif; ?>
-        
-
         <button type="submit">送信</button>
     </form>
     <div class="scf-message"></div>
