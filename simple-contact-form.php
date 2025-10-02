@@ -971,7 +971,7 @@ function scf_login_form_shortcode($atts) {
     $redirect = isset($_GET['redirect_to']) ? esc_url_raw($_GET['redirect_to']) : ( function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/') );
     $args = [
         'redirect' => $redirect,
-        'label_username' => __('Email or username', 'simple-contact-form'),
+        'label_username' => __('Eメールまたはユーザー名', 'simple-contact-form'),
         'label_log_in' => __('ログイン', 'simple-contact-form'),
     ];
     ob_start();
