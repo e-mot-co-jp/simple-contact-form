@@ -1469,17 +1469,55 @@ function scf_wc_account_social_connections_endpoint(){
     echo '<h2>'.esc_html__('ソーシャルアカウント連携','simple-contact-form').'</h2>';
     echo '<p>'.esc_html__('SNSアカウントを連携すると次回以降ワンクリックでログインできます。','simple-contact-form').'</p>';
     if (shortcode_exists('nextend_social_login')) {
-        // A: Connect UI 表示 (providers 未指定で有効プロバイダ全部 / 指定したい場合は設定で上書き)
-        $scf_nextend_html = do_shortcode('[nextend_social_login connect="1"]');
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('[SCF SocialLink] rendered nextend_social_login connect=1 length='.strlen(trim(strip_tags($scf_nextend_html))));
+        // A: Connect UI 表示: バリエーションを順に試行
+        $variants = [
+            '[nextend_social_login connect="1"]',
+            '[nextend_social_login show="connect"]',
+            '[nextend_social_login show="buttons" connect="1"]',
+            '[nextend_social_login]' // 最後に素の形
+        ];
+        $rendered = '';
+        $chosen  = '';
+        foreach($variants as $sc){
+            $html = do_shortcode($sc);
+            $len  = strlen(trim(strip_tags($html)));
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[SCF SocialLink] try shortcode="'. $sc .'" stripped_length='. $len);
+            }
+            if ($len > 0) { $rendered = $html; $chosen = $sc; break; }
         }
-        if (trim($scf_nextend_html) === '') {
-            echo '<div class="scf-social-connect-block scf-nextend-empty" style="border:1px dashed #ccc;padding:16px;">';
-            echo '<p style="margin:0;color:#666;font-size:13px;">ソーシャルログイン短コードは検出されましたが表示要素が空です。Nextend プラグイン設定(有効プロバイダ/表示条件)を確認してください。</p>';
-            echo '</div>';
+        if ($rendered) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[SCF SocialLink] chosen shortcode variant='. $chosen);
+            }
+            echo '<div class="scf-social-connect-block">'.$rendered.'</div>';
         } else {
-            echo '<div class="scf-social-connect-block">'.$scf_nextend_html.'</div>';
+            echo '<div class="scf-social-connect-block scf-nextend-empty" style="border:1px dashed #ccc;padding:16px;">';
+            echo '<p style="margin:0 0 8px;color:#666;font-size:13px;">短コードは検出されましたがいずれのバリエーションも空でした。Nextend の表示条件あるいは有効プロバイダを再確認してください。</p>';
+            // 追加診断: 接続済みプロバイダを列挙（利用可能なら）
+            if (function_exists('get_user_meta')) {
+                $u = wp_get_current_user();
+                $linked = [];
+                // Nextend は user meta に _nsl_provider_{provider} 等で格納するためざっくり走査
+                $um = get_user_meta($u->ID);
+                foreach($um as $k=>$vals){
+                    if (strpos($k,'_nsl_provider_') === 0) {
+                        $prov = substr($k, strlen('_nsl_provider_'));
+                        $linked[] = esc_html($prov);
+                    }
+                }
+                if ($linked) {
+                    echo '<p style="margin:0 0 4px;font-size:12px;color:#333;">接続済み: '.implode(', ',$linked).'</p>';
+                } else {
+                    echo '<p style="margin:0 0 4px;font-size:12px;color:#333;">接続済みプロバイダ: (なし)</p>';
+                }
+            }
+            echo '<ul style="margin:8px 0 0;padding-left:18px;font-size:11px;line-height:1.5;color:#555;">';
+            echo '<li>キャッシュ/最適化プラグインを一時無効化</li>';
+            echo '<li>Nextend 管理画面で「ログイン済みユーザー向け Connect ボタン表示」設定を確認</li>';
+            echo '<li>必要なら providers を明示: [nextend_social_login provider="google,facebook,line" connect="1"]</li>';
+            echo '</ul>';
+            echo '</div>';
         }
     } else {
         echo '<p style="color:#666;">'.esc_html__('ソーシャルログインプラグインが有効ではありません。','simple-contact-form').'</p>';
