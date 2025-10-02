@@ -1042,9 +1042,11 @@ function scf_register_form_shortcode($atts) {
     }
     
     $sitekey = scf_get_turnstile_sitekey();
+    $required_score = intval(get_option('scf_pw_strength_min', 0));
     ?>
     <form method="post" class="scf-register-form">
         <?php wp_nonce_field('scf_register', 'scf_register_nonce'); ?>
+        <script>window.scfPwRequiredScore = <?php echo (int) $required_score; ?>;</script>
         <p>
             <label for="scf_email"><?php esc_html_e('Eメール', 'simple-contact-form'); ?></label><br>
             <input type="email" name="scf_email" id="scf_email" required value="<?php echo esc_attr(isset($_POST['scf_email']) ? $_POST['scf_email'] : ''); ?>">
@@ -1061,7 +1063,7 @@ function scf_register_form_shortcode($atts) {
             <label for="scf_password_confirm"><?php esc_html_e('パスワード（確認）', 'simple-contact-form'); ?></label><br>
             <input type="password" name="scf_password_confirm" id="scf_password_confirm" required>
         </p>
-        <div class="scf-password-helper" style="display:none; margin:12px 0; padding:12px 14px; background:rgba(0,0,0,.04); border-radius:10px;">
+        <div class="scf-password-helper" style="display:none;margin:12px 0;padding:12px 14px;background:rgba(0,0,0,.05);border-radius:10px;">
             <div class="scf-password-policy" style="margin:0 0 10px;">
                 <p style="margin:0 0 6px;font-weight:bold;">パスワード要件:</p>
                 <ul style="list-style:disc;margin:0 0 0 20px;padding:0;">
@@ -1074,10 +1076,10 @@ function scf_register_form_shortcode($atts) {
                 </ul>
             </div>
             <div class="scf-password-strength" style="margin:4px 0 0;">
-                <div class="scf-strength-bar" style="height:6px;background:#eee;border-radius:3px;overflow:hidden;position:relative;">
+                <div class="scf-strength-bar" style="height:6px;background:#e5e5e5;border-radius:3px;overflow:hidden;position:relative;">
                     <span class="scf-strength-fill" style="display:block;height:100%;width:0;background:#d9534f;transition:width .3s,background .3s;"></span>
                 </div>
-                <p class="scf-strength-text" style="font-size:12px;margin:6px 0 0;color:#666;">強度: -</p>
+                <p class="scf-strength-text" style="font-size:12px;margin:6px 0 0;color:#555;">強度: -</p>
             </div>
         </div>
         <?php if ($sitekey) : ?>

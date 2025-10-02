@@ -1,5 +1,6 @@
 (function($){
   var shown = false;
+  var requiredScore = parseInt(window.scfPwRequiredScore || '0',10) || 0;
   function ensureShow(){
     if(!shown){
       $('.scf-password-helper').fadeIn(150);
@@ -27,17 +28,18 @@
         li.css({color:'#c00',textDecoration:'none',opacity:1});
       }
     });
-    updateStrength(p);
+    var score = updateStrength(p);
+    enforceThreshold(score, rules);
   }
 
   function updateStrength(p){
     var $fill = $('.scf-strength-fill');
     var $text = $('.scf-strength-text');
-    if(!$fill.length) return;
+    if(!$fill.length) return 0;
     if(!p){
       $fill.css({width:'0',background:'#d9534f'});
       if($text.length) $text.text('強度: -');
-      return;
+      return 0;
     }
     var score = 0;
     if(typeof zxcvbn === 'function'){
@@ -50,9 +52,43 @@
     var labels = ['とても弱い','弱い','やや弱い','普通','強い'];
     $fill.css({width: widths[score] || '20%', background: colors[score] || '#d9534f'});
     if($text.length) $text.text('強度: ' + (labels[score] || '-'));
+    return score;
+  }
+
+  function enforceThreshold(score, rules){
+    var $btn = $('.scf-register-form button[type="submit"]');
+    var $msg = $('.scf-pw-threshold-msg');
+    if(!$msg.length){
+      $msg = $('<p class="scf-pw-threshold-msg" style="margin:6px 0 0;font-size:12px;color:#c00;display:none;"></p>').insertAfter('.scf-password-helper');
+    }
+    if(requiredScore > 0){
+      if(score < requiredScore){
+        $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
+        $msg.text('パスワード強度が不足しています (必要: '+requiredScore+' / 現在: '+score+')').show();
+      } else if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)) {
+        // 形式要件未達の場合も送信不可（明示メッセージ）
+        $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
+        $msg.text('パスワード要件をすべて満たしてください。').show();
+      } else {
+        $btn.prop('disabled', false).css({opacity:1,cursor:'pointer'});
+        $msg.hide();
+      }
+    } else {
+      // 閾値無効時も形式要件満たすまで無効にするか迷うが現状は許可
+      if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)) {
+        $btn.prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
+        $msg.text('パスワード要件をすべて満たしてください。').show();
+      } else {
+        $btn.prop('disabled', false).css({opacity:1,cursor:'pointer'});
+        $msg.hide();
+      }
+    }
   }
 
   $(document).on('focus','#scf_password,#scf_password_confirm', ensureShow);
   $(document).on('input','#scf_password,#scf_password_confirm', evaluate);
-  $(function(){ if($('#scf_password').val() || $('#scf_password_confirm').val()){ ensureShow(); evaluate(); } });
+  $(function(){
+    // サーバー埋め込みされた閾値取得用 hidden/meta 等があれば将来利用
+    evaluate();
+  });
 })(jQuery);
