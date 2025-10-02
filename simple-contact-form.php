@@ -975,7 +975,7 @@ function scf_login_form_shortcode($atts) {
         'label_log_in' => __('ログイン', 'simple-contact-form'),
     ];
     ob_start();
-    echo scf_render_social_login_block();
+    //echo scf_render_social_login_block();
     wp_login_form($args);
     return ob_get_clean();
 }
