@@ -995,7 +995,7 @@ function scf_register_form_shortcode($atts) {
         foreach ($errors as $e) echo '<p class="scf-error">' . esc_html($e) . '</p>';
         echo '</div>';
     }
-    echo scf_render_social_login_block();
+    
     $sitekey = scf_get_turnstile_sitekey();
     ?>
     <form method="post" class="scf-register-form">
@@ -1018,6 +1018,7 @@ function scf_register_form_shortcode($atts) {
         <p><button type="submit"><?php esc_html_e('登録', 'simple-contact-form'); ?></button></p>
     </form>
     <?php
+    echo scf_render_social_login_block();
     return ob_get_clean();
 }
 add_shortcode('scf_register_form', 'scf_register_form_shortcode');
