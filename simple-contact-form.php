@@ -1061,22 +1061,24 @@ function scf_register_form_shortcode($atts) {
             <label for="scf_password_confirm"><?php esc_html_e('パスワード（確認）', 'simple-contact-form'); ?></label><br>
             <input type="password" name="scf_password_confirm" id="scf_password_confirm" required>
         </p>
-        <div class="scf-password-strength" style="margin:6px 0 12px;">
-            <div class="scf-strength-bar" style="height:6px;background:#eee;border-radius:3px;overflow:hidden;position:relative;">
-                <span class="scf-strength-fill" style="display:block;height:100%;width:0;background:#d9534f;transition:width .3s,background .3s;"></span>
+        <div class="scf-password-helper" style="display:none; margin:12px 0; padding:12px 14px; background:rgba(0,0,0,.04); border-radius:10px;">
+            <div class="scf-password-policy" style="margin:0 0 10px;">
+                <p style="margin:0 0 6px;font-weight:bold;">パスワード要件:</p>
+                <ul style="list-style:disc;margin:0 0 0 20px;padding:0;">
+                    <li data-rule="length">8文字以上</li>
+                    <li data-rule="upper">英大文字を含む (A-Z)</li>
+                    <li data-rule="lower">英小文字を含む (a-z)</li>
+                    <li data-rule="digit">数字を含む (0-9)</li>
+                    <li data-rule="symbol">記号を含む (!@#$% など)</li>
+                    <li data-rule="match">確認欄と一致</li>
+                </ul>
             </div>
-            <p class="scf-strength-text" style="font-size:12px;margin:4px 0 0;color:#666;">強度: -</p>
-        </div>
-        <div class="scf-password-policy">
-            <p style="margin:6px 0 4px;font-weight:bold;">パスワード要件:</p>
-            <ul style="list-style:disc;margin-left:20px;">
-                <li data-rule="length">8文字以上</li>
-                <li data-rule="upper">英大文字を含む (A-Z)</li>
-                <li data-rule="lower">英小文字を含む (a-z)</li>
-                <li data-rule="digit">数字を含む (0-9)</li>
-                <li data-rule="symbol">記号を含む (!@#$% など)</li>
-                <li data-rule="match">確認欄と一致</li>
-            </ul>
+            <div class="scf-password-strength" style="margin:4px 0 0;">
+                <div class="scf-strength-bar" style="height:6px;background:#eee;border-radius:3px;overflow:hidden;position:relative;">
+                    <span class="scf-strength-fill" style="display:block;height:100%;width:0;background:#d9534f;transition:width .3s,background .3s;"></span>
+                </div>
+                <p class="scf-strength-text" style="font-size:12px;margin:6px 0 0;color:#666;">強度: -</p>
+            </div>
         </div>
         <?php if ($sitekey) : ?>
             <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>"></div>
