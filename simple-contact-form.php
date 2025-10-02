@@ -939,8 +939,10 @@ function scf_register_form_shortcode($atts) {
         $email = isset($_POST['scf_email']) ? sanitize_email($_POST['scf_email']) : '';
         $username = isset($_POST['scf_username']) ? sanitize_user($_POST['scf_username']) : '';
         $password = isset($_POST['scf_password']) ? $_POST['scf_password'] : '';
+        $password_confirm = isset($_POST['scf_password_confirm']) ? $_POST['scf_password_confirm'] : '';
         if (empty($email) || !is_email($email)) $errors[] = __('有効なメールアドレスを入力してください。', 'simple-contact-form');
         if (empty($password) || strlen($password) < 6) $errors[] = __('パスワードは6文字以上必要です。', 'simple-contact-form');
+        if ($password !== $password_confirm) $errors[] = __('パスワード（確認）が一致しません。', 'simple-contact-form');
         if (empty($username) && $email) {
             $username = sanitize_user(current(explode('@', $email)), true);
         }
@@ -1001,16 +1003,20 @@ function scf_register_form_shortcode($atts) {
     <form method="post" class="scf-register-form">
         <?php wp_nonce_field('scf_register', 'scf_register_nonce'); ?>
         <p>
-            <label for="scf_email"><?php esc_html_e('Email', 'simple-contact-form'); ?></label><br>
+            <label for="scf_email"><?php esc_html_e('Eメール', 'simple-contact-form'); ?></label><br>
             <input type="email" name="scf_email" id="scf_email" required value="<?php echo esc_attr(isset($_POST['scf_email']) ? $_POST['scf_email'] : ''); ?>">
         </p>
         <p>
-            <label for="scf_username"><?php esc_html_e('Username (optional)', 'simple-contact-form'); ?></label><br>
+            <label for="scf_username"><?php esc_html_e('ユーザー名 (任意)', 'simple-contact-form'); ?></label><br>
             <input type="text" name="scf_username" id="scf_username" value="<?php echo esc_attr(isset($_POST['scf_username']) ? $_POST['scf_username'] : ''); ?>">
         </p>
         <p>
-            <label for="scf_password"><?php esc_html_e('Password', 'simple-contact-form'); ?></label><br>
+            <label for="scf_password"><?php esc_html_e('パスワード', 'simple-contact-form'); ?></label><br>
             <input type="password" name="scf_password" id="scf_password" required>
+        </p>
+        <p>
+            <label for="scf_password_confirm"><?php esc_html_e('パスワード（確認）', 'simple-contact-form'); ?></label><br>
+            <input type="password" name="scf_password_confirm" id="scf_password_confirm" required>
         </p>
         <?php if ($sitekey) : ?>
             <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>"></div>
