@@ -995,7 +995,7 @@ function scf_register_form_shortcode($atts) {
         $secret = scf_get_turnstile_secret();
         if ($secret) {
             $token = '';
-            foreach (['cf-turnstile-response','cf_turnstile_response','turnstile-response'] as $k) {
+            foreach (['cf-turnstile-response','cf_turnstile_response','turnstile-response','cf_turnstile_token','cf_turnstile_token','cf_turnstile_token','scf_reg_turnstile_token'] as $k) {
                 if (isset($_POST[$k]) && $_POST[$k] !== '') { $token = sanitize_text_field($_POST[$k]); break; }
             }
             if (!$token) {
@@ -1085,7 +1085,12 @@ function scf_register_form_shortcode($atts) {
             </div>
         </div>
         <?php if ($sitekey) : ?>
-            <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>"></div>
+            <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>" data-callback="scfRegTurnstileSuccess" data-expired-callback="scfRegTurnstileExpired"></div>
+            <input type="hidden" name="cf_turnstile_token" id="scf_reg_turnstile_token" value="">
+            <script>
+            window.scfRegTurnstileSuccess = function(token){ var el=document.getElementById('scf_reg_turnstile_token'); if(el){ el.value = token || ''; } };
+            window.scfRegTurnstileExpired = function(){ var el=document.getElementById('scf_reg_turnstile_token'); if(el){ el.value=''; } };
+            </script>
         <?php endif; ?>
         <p><button type="submit"><?php esc_html_e('登録', 'simple-contact-form'); ?></button></p>
     </form>
@@ -1161,4 +1166,54 @@ function scf_siteguard_captcha_login(){
     }
 }
 add_action('woocommerce_login_form', 'scf_siteguard_captcha_login', 20);
+
+/**
+ * ソーシャルログイン(Nextend等)経由で作成されたユーザーが subscriber になるケースを補正し
+ * WooCommerce の "customer" ロールへ自動昇格させる。
+ *
+ * 条件:
+ *  - WooCommerce が有効 (customer ロールが存在)
+ *  - 追加直後のユーザーが subscriber だけを持つ
+ *  - 管理画面でのユーザー作成ではない (is_admin() を除外)
+ *  - リクエストがフロントの認証/登録関連URLまたは Nextend のパラメータを含む
+ */
+function scf_force_customer_role_for_social($user_id){
+    if ( is_admin() ) return; // 管理画面操作は尊重
+    if ( ! function_exists('wc_get_page_permalink') ) return; // WooCommerce未導入なら何もしない
+    if ( ! get_role('customer') ) return; // customer ロールが無ければ安全に終了
+
+    $user = get_userdata($user_id);
+    if ( ! $user ) return;
+    // すでに他ロールを持っている/ customer なら不要
+    if ( in_array('customer', (array)$user->roles, true) ) return;
+    if ( count((array)$user->roles) !== 1 || ! in_array('subscriber', (array)$user->roles, true) ) return;
+
+    // ソーシャルログインっぽいシグナルを収集
+    $is_social = false;
+    // Nextend 典型的パラメータ（環境により異なる場合あり）
+    foreach (['nsl_provider','nsl_nonce','nsl_auth','provider'] as $k){
+        if ( isset($_REQUEST[$k]) && $_REQUEST[$k] !== '' ){ $is_social = true; break; }
+    }
+    // HTTP_REFERER に login / register / my-account が含まれていたらフロント登録とみなす
+    if ( ! $is_social && ! empty($_SERVER['HTTP_REFERER']) ) {
+        $ref_path = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_PATH);
+        if ( $ref_path && preg_match('#/(login|register|my-account)#', $ref_path) ) {
+            $is_social = true; // 厳密ではないがフロント登録補正目的
+        }
+    }
+    // 追加保険: 直後のセッション/クッキーに nsl_ で始まるキーがあればヒントとする
+    if ( ! $is_social ) {
+        foreach ($_COOKIE as $ckey => $cval){
+            if ( stripos($ckey, 'nsl_') === 0 ){ $is_social = true; break; }
+        }
+    }
+
+    if ( ! $is_social ) return; // 判定できなければ何もしない（冤罪防止）
+
+    // ロール変更
+    $wp_user = new WP_User($user_id);
+    $wp_user->set_role('customer');
+    do_action('scf_user_promoted_to_customer_from_social', $user_id);
+}
+add_action('user_register','scf_force_customer_role_for_social', 200);
 
