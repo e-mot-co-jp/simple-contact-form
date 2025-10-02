@@ -1468,67 +1468,55 @@ function scf_wc_account_social_connections_endpoint(){
     if ( ! is_user_logged_in() ) return;
     echo '<h2>'.esc_html__('ソーシャルアカウント連携','simple-contact-form').'</h2>';
     echo '<p>'.esc_html__('SNSアカウントを連携すると次回以降ワンクリックでログインできます。','simple-contact-form').'</p>';
+    $user = wp_get_current_user();
+    $has_password = ! empty($user->user_pass);
     if (shortcode_exists('nextend_social_login')) {
-        // A: Connect UI 表示: バリエーションを順に試行
-        $variants = [
-            '[nextend_social_login connect="1"]',
-            '[nextend_social_login show="connect"]',
-            '[nextend_social_login show="buttons" connect="1"]',
-            '[nextend_social_login]' // 最後に素の形
-        ];
-        $rendered = '';
-        $chosen  = '';
-        foreach($variants as $sc){
-            $html = do_shortcode($sc);
-            $len  = strlen(trim(strip_tags($html)));
-            if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('[SCF SocialLink] try shortcode="'. $sc .'" stripped_length='. $len);
-            }
-            if ($len > 0) { $rendered = $html; $chosen = $sc; break; }
+        $unlink_flag = $has_password ? '1' : '0';
+        $heading = esc_attr__('Connect Social Accounts', 'simple-contact-form');
+        // ログイン済みなので login ボタンは不要 -> login="0"
+        $primary_sc = '[nextend_social_login login="0" link="1" unlink="'.$unlink_flag.'" heading="'.$heading.'"]';
+        $html = do_shortcode($primary_sc);
+        $len = strlen(trim(strip_tags($html)));
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[SCF SocialLink] shortcode primary stripped_length='.$len.' unlink_flag='.$unlink_flag);
         }
-        if ($rendered) {
+        if ($len === 0) {
+            // フォールバック: login="1" (一部設定で login=0 が何も返さない場合)
+            $fallback_sc = '[nextend_social_login login="1" link="1" unlink="'.$unlink_flag.'" heading="'.$heading.'"]';
+            $fb_html = do_shortcode($fallback_sc);
+            $fb_len = strlen(trim(strip_tags($fb_html)));
             if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('[SCF SocialLink] chosen shortcode variant='. $chosen);
+                error_log('[SCF SocialLink] shortcode fallback stripped_length='.$fb_len);
             }
-            echo '<div class="scf-social-connect-block">'.$rendered.'</div>';
-        } else {
-            echo '<div class="scf-social-connect-block scf-nextend-empty" style="border:1px dashed #ccc;padding:16px;">';
-            echo '<p style="margin:0 0 8px;color:#666;font-size:13px;">短コードは検出されましたがいずれのバリエーションも空でした。Nextend の表示条件あるいは有効プロバイダを再確認してください。</p>';
-            // 追加診断: 接続済みプロバイダを列挙（利用可能なら）
-            if (function_exists('get_user_meta')) {
-                $u = wp_get_current_user();
+            if ($fb_len > 0) {
+                echo '<div class="scf-social-connect-block">'.$fb_html.'</div>';
+            } else {
+                // 診断表示
+                echo '<div class="scf-social-connect-block scf-nextend-empty" style="border:1px dashed #ccc;padding:16px;">';
+                echo '<p style="margin:0 0 8px;color:#666;font-size:13px;">Nextend ショートコード (login/link/unlink) の出力が空です。設定を確認してください。</p>';
                 $linked = [];
-                // Nextend は user meta に _nsl_provider_{provider} 等で格納するためざっくり走査
-                $um = get_user_meta($u->ID);
-                foreach($um as $k=>$vals){
-                    if (strpos($k,'_nsl_provider_') === 0) {
-                        $prov = substr($k, strlen('_nsl_provider_'));
-                        $linked[] = esc_html($prov);
-                    }
-                }
-                if ($linked) {
-                    echo '<p style="margin:0 0 4px;font-size:12px;color:#333;">接続済み: '.implode(', ',$linked).'</p>';
-                } else {
-                    echo '<p style="margin:0 0 4px;font-size:12px;color:#333;">接続済みプロバイダ: (なし)</p>';
-                }
+                $um = get_user_meta($user->ID);
+                foreach($um as $k=>$vals){ if (strpos($k,'_nsl_provider_') === 0) { $linked[] = esc_html(substr($k, strlen('_nsl_provider_'))); } }
+                echo '<p style="margin:0 0 4px;font-size:12px;color:#333;">接続済みプロバイダ: '.($linked?implode(', ',$linked):'(なし)').'</p>';
+                echo '<ul style="margin:8px 0 0;padding-left:18px;font-size:11px;line-height:1.5;color:#555;">';
+                echo '<li>少なくとも1つのプロバイダが有効 (アプリキー設定済) か</li>';
+                echo '<li>ログイン済ユーザー向けの Link ボタン抑制設定が無効化されているか</li>';
+                echo '<li>キャッシュ/最適化 (遅延読み込み) を一時停止</li>';
+                echo '<li>必要なら provider 限定例: [nextend_social_login provider="google" login="0" link="1" unlink="'.$unlink_flag.'" heading="'.$heading.'"]</li>';
+                echo '</ul>';
+                echo '</div>';
             }
-            echo '<ul style="margin:8px 0 0;padding-left:18px;font-size:11px;line-height:1.5;color:#555;">';
-            echo '<li>キャッシュ/最適化プラグインを一時無効化</li>';
-            echo '<li>Nextend 管理画面で「ログイン済みユーザー向け Connect ボタン表示」設定を確認</li>';
-            echo '<li>必要なら providers を明示: [nextend_social_login provider="google,facebook,line" connect="1"]</li>';
-            echo '</ul>';
-            echo '</div>';
+        } else {
+            echo '<div class="scf-social-connect-block">'.$html.'</div>';
         }
     } else {
         echo '<p style="color:#666;">'.esc_html__('ソーシャルログインプラグインが有効ではありません。','simple-contact-form').'</p>';
     }
     // B: パスワード未設定なら Disconnect ボタンを JS/CSS で抑制
-    $user = wp_get_current_user();
-    $has_password = !empty($user->user_pass);
     if (!$has_password) {
-        // Nextend の Disconnect ボタンが nsl-button-disconnect を含む想定で非表示
+        // unlink=0 でボタンは出ていない想定だが念のため CSS でも隠す
         echo '<style>.scf-social-connect-block .nsl-button-disconnect{display:none!important;}</style>';
-        echo '<p style="margin-top:16px;color:#d33;font-size:12px;">'.esc_html__('現在パスワード未設定のため、既存連携の解除は表示されません。','simple-contact-form').'</p>';
+        echo '<p style="margin-top:16px;color:#d33;font-size:12px;">'.esc_html__('現在パスワード未設定のため、既存連携の解除 (Unlink) は無効化されています。','simple-contact-form').'</p>';
     }
     do_action('scf_after_social_connections_block', $user);
 }
@@ -1540,7 +1528,10 @@ function scf_wc_account_dashboard_social_snippet(){
     if ( ! shortcode_exists('nextend_social_login') ) return;
     echo '<section class="scf-social-connect-mini" style="margin:24px 0;padding:16px;border:1px solid #e2e2e2;border-radius:8px;">';
     echo '<h3 style="margin:0 0 10px;font-size:16px;">'.esc_html__('ソーシャル連携','simple-contact-form').'</h3>';
-    echo do_shortcode('[nextend_social_login connect="1"]');
+    $user = wp_get_current_user();
+    $has_password = ! empty($user->user_pass);
+    $unlink_flag = $has_password ? '1' : '0';
+    echo do_shortcode('[nextend_social_login login="0" link="1" unlink="'.$unlink_flag.'" heading="'.esc_attr__('Connect Social Accounts','simple-contact-form').'"]');
     echo '<p style="margin:8px 0 0;font-size:12px;color:#666;">'.esc_html__('詳細な管理は「ソーシャル連携」メニューへ。','simple-contact-form').'</p>';
     echo '</section>';
 }
