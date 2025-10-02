@@ -1054,11 +1054,20 @@ function scf_register_form_shortcode($atts) {
             }
         }
         if (empty($errors)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[SCF RegisterDBG] attempting wc_create_new_customer email='.$email.' username='.$username.' pw_len='.strlen($password));
+            }
             if (function_exists('wc_create_new_customer')) {
                 $user_id = wc_create_new_customer($email, $username, $password);
                 if (is_wp_error($user_id)) {
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('[SCF RegisterDBG] wc_create_new_customer error: '.$user_id->get_error_code().' msg='.$user_id->get_error_message());
+                    }
                     $errors[] = $user_id->get_error_message();
                 } else {
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('[SCF RegisterDBG] registration success user_id='.$user_id);
+                    }
                     wp_set_current_user($user_id);
                     wp_set_auth_cookie($user_id);
                     do_action('wp_login', $username);
@@ -1068,10 +1077,17 @@ function scf_register_form_shortcode($atts) {
             } else {
                 $errors[] = __('WooCommerce functions not available.', 'simple-contact-form');
             }
+        } else {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[SCF RegisterDBG] pre-wc errors='.wp_json_encode($errors));
+            }
         }
     }
     ob_start();
     if (!empty($errors)) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[SCF RegisterDBG] output errors='.wp_json_encode($errors));
+        }
         echo '<div class="scf-register-errors">';
         foreach ($errors as $e) echo '<p class="scf-error">' . esc_html($e) . '</p>';
         echo '</div>';
