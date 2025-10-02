@@ -997,11 +997,9 @@ function scf_register_form_shortcode($atts) {
             $token = '';
             // Cloudflare 推奨 name 属性: cf-turnstile-response （data-sitekeyと併用）
             $candidate_keys = [
-                'cf-turnstile-response', // 標準
-                'cf_turnstile_response', // 破壊的置換対策
-                'turnstile-response',
-                'cf_turnstile_token',
-                'scf_reg_turnstile_token',
+                'cf-turnstile-response', // 標準（Cloudflare 挿入）
+                'cf_turnstile_response', // 名前変換対策
+                'turnstile-response',    // 念のためレガシー互換
             ];
             foreach ($candidate_keys as $k) {
                 if (isset($_POST[$k]) && $_POST[$k] !== '') { $token = sanitize_text_field($_POST[$k]); break; }
@@ -1100,14 +1098,25 @@ function scf_register_form_shortcode($atts) {
                 <p class="scf-strength-text" style="font-size:12px;margin:6px 0 0;color:#555;">強度: -</p>
             </div>
         </div>
-        <?php if ($sitekey) : ?>
-            <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>" data-callback="scfRegTurnstileSuccess" data-expired-callback="scfRegTurnstileExpired"></div>
-            <input type="hidden" name="cf_turnstile_token" id="scf_reg_turnstile_token" value="">
-            <script>
-            window.scfRegTurnstileSuccess = function(token){ var el=document.getElementById('scf_reg_turnstile_token'); if(el){ el.value = token || ''; } };
-            window.scfRegTurnstileExpired = function(){ var el=document.getElementById('scf_reg_turnstile_token'); if(el){ el.value=''; } };
-            </script>
-        <?php endif; ?>
+                <?php if ($sitekey) : ?>
+                        <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>" data-callback="scfRegTurnstileSuccess" data-expired-callback="scfRegTurnstileExpired"></div>
+                        <script>
+                        window.scfRegTurnstileSuccess = function(){ /* Cloudflare が自動で cf-turnstile-response を挿入 */ };
+                        window.scfRegTurnstileExpired = function(){ var f=document.querySelector('input[name="cf-turnstile-response"]'); if(f){ f.value=''; } };
+                        (function(){
+                            // 送信直前にトークン存在チェック
+                            document.addEventListener('submit', function(e){
+                                var form = e.target;
+                                if(!form.classList || !form.classList.contains('scf-register-form')) return;
+                                var field = form.querySelector('input[name="cf-turnstile-response"]');
+                                if(!field || !field.value){
+                                    e.preventDefault();
+                                    alert('セキュリティ確認（Turnstile）を完了してください。');
+                                }
+                            }, true);
+                        })();
+                        </script>
+                <?php endif; ?>
         <p><button type="submit"><?php esc_html_e('登録', 'simple-contact-form'); ?></button></p>
     </form>
     <?php
