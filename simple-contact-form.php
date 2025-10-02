@@ -20,6 +20,21 @@ function scf_enqueue_scripts() {
     if ( get_option('scf_turnstile_enabled', 0) ) {
         wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
     }
+    // 会員登録用パスワードリアルタイムチェック（常時読み込みでも軽量）
+    wp_enqueue_script('scf-register', plugins_url('register.js', __FILE__), ['jquery'], '1.0.0', true);
+    // WordPress 同梱の zxcvbn を利用（ハンドル: zxcvbn-async または zxcvbn）
+    if ( ! wp_script_is('zxcvbn-async','registered') && ! wp_script_is('zxcvbn','registered') ) {
+        // フォールバックCDN（理想は WP 同梱利用だが環境差異考慮）
+        wp_register_script('zxcvbn', 'https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js', [], '4.4.2', true);
+    }
+    // 既存のコアハンドルがあればそれをenqueue、なければフォールバック
+    if ( wp_script_is('zxcvbn-async','registered') ) {
+        wp_enqueue_script('zxcvbn-async');
+    } elseif ( wp_script_is('zxcvbn','registered') ) {
+        wp_enqueue_script('zxcvbn');
+    } else {
+        wp_enqueue_script('zxcvbn');
+    }
 }
 add_action('wp_enqueue_scripts', 'scf_enqueue_scripts');
 
@@ -328,6 +343,8 @@ function scf_admin_inquiry_settings_page() {
         $turnstile_enabled = isset($_POST['scf_turnstile_enabled']) ? 1 : 0;
         $turnstile_sitekey = isset($_POST['scf_turnstile_sitekey']) ? sanitize_text_field($_POST['scf_turnstile_sitekey']) : '';
         $turnstile_secret = isset($_POST['scf_turnstile_secret']) ? sanitize_text_field($_POST['scf_turnstile_secret']) : '';
+        $pw_strength_min = isset($_POST['scf_pw_strength_min']) ? intval($_POST['scf_pw_strength_min']) : 0;
+        if ($pw_strength_min < 0) $pw_strength_min = 0; if ($pw_strength_min > 4) $pw_strength_min = 4;
         update_option('scf_file_period', $period);
         update_option('scf_support_mail', $mail);
         update_option('scf_use_python_spam', $use_py);
@@ -335,6 +352,7 @@ function scf_admin_inquiry_settings_page() {
         update_option('scf_turnstile_enabled', $turnstile_enabled);
         update_option('scf_turnstile_sitekey', $turnstile_sitekey);
         update_option('scf_turnstile_secret', $turnstile_secret);
+        update_option('scf_pw_strength_min', $pw_strength_min);
         echo '<div class="updated notice"><p>設定を保存しました。</p></div>';
     }
     // テスト実行ハンドラ
@@ -351,6 +369,7 @@ function scf_admin_inquiry_settings_page() {
     $turnstile_enabled = get_option('scf_turnstile_enabled', 0);
     $turnstile_sitekey = get_option('scf_turnstile_sitekey', '0x4AAAAAAB4PWT_eW58sqk4P');
     $turnstile_secret = get_option('scf_turnstile_secret', '0x4AAAAAAB4PWQ247r0OqYHTh3uHTDKkBmI');
+    $pw_strength_min = get_option('scf_pw_strength_min', 0);
     echo '<div class="wrap"><h1>お問い合わせ設定</h1>';
     echo '<form method="post">';
     wp_nonce_field('scf_settings', 'scf_settings_nonce');
@@ -362,6 +381,11 @@ function scf_admin_inquiry_settings_page() {
     echo '<tr><th>Turnstile を有効化</th><td><label><input type="checkbox" name="scf_turnstile_enabled" ' . checked($turnstile_enabled, 1, false) . ' /> 有効にする</label></td></tr>';
     echo '<tr><th>Turnstile sitekey</th><td><input type="text" name="scf_turnstile_sitekey" value="' . esc_attr($turnstile_sitekey) . '" style="width:420px;"></td></tr>';
     echo '<tr><th>Turnstile secret</th><td><input type="text" name="scf_turnstile_secret" value="' . esc_attr($turnstile_secret) . '" style="width:420px;"></td></tr>';
+    echo '<tr><th>最小パスワード強度</th><td><select name="scf_pw_strength_min">';
+    foreach ([0=>'0 (制限なし)',1=>'1',2=>'2',3=>'3 (推奨初期値)',4=>'4 (最も厳しい)'] as $k=>$label){
+        echo '<option value="'.intval($k).'"'.selected($pw_strength_min,$k,false).'>'.esc_html($label).'</option>';
+    }
+    echo '</select><p class="description">zxcvbn の score (0~4)。閾値以上で登録許可。0 は無効。</p></td></tr>';
     echo '</table>';
     echo '<p><input type="submit" class="button-primary" value="保存"></p>';
     echo '</form>';
@@ -941,7 +965,33 @@ function scf_register_form_shortcode($atts) {
         $password = isset($_POST['scf_password']) ? $_POST['scf_password'] : '';
         $password_confirm = isset($_POST['scf_password_confirm']) ? $_POST['scf_password_confirm'] : '';
         if (empty($email) || !is_email($email)) $errors[] = __('有効なメールアドレスを入力してください。', 'simple-contact-form');
-        if (empty($password) || strlen($password) < 6) $errors[] = __('パスワードは6文字以上必要です。', 'simple-contact-form');
+        // パスワードポリシー: 8文字以上 / 大文字 / 小文字 / 数字 / 記号
+        if (empty($password)) {
+            $errors[] = __('パスワードを入力してください。', 'simple-contact-form');
+        } else {
+            if (strlen($password) < 8) $errors[] = __('パスワードは8文字以上必要です。', 'simple-contact-form');
+            if (!preg_match('/[A-Z]/', $password)) $errors[] = __('パスワードには英大文字が少なくとも1文字必要です。', 'simple-contact-form');
+            if (!preg_match('/[a-z]/', $password)) $errors[] = __('パスワードには英小文字が少なくとも1文字必要です。', 'simple-contact-form');
+            if (!preg_match('/\d/', $password)) $errors[] = __('パスワードには数字が少なくとも1文字必要です。', 'simple-contact-form');
+            if (!preg_match('/[^A-Za-z0-9]/', $password)) $errors[] = __('パスワードには記号が少なくとも1文字必要です。', 'simple-contact-form');
+            if (preg_match('/\s/', $password)) $errors[] = __('パスワードに空白文字は使用できません。', 'simple-contact-form');
+            // 簡易強度スコア（zxcvbn はサーバー利用しないため近似）
+            $score = 0; // 0~4
+            $classes = 0;
+            if (preg_match('/[A-Z]/',$password)) $classes++;
+            if (preg_match('/[a-z]/',$password)) $classes++;
+            if (preg_match('/\d/',$password)) $classes++;
+            if (preg_match('/[^A-Za-z0-9]/',$password)) $classes++;
+            // 長さと複雑度でスコア近似
+            if ($classes >= 3 && strlen($password) >= 12) $score = 4;
+            elseif ($classes >= 3 && strlen($password) >= 10) $score = 3;
+            elseif ($classes >= 2 && strlen($password) >= 8) $score = 2;
+            elseif ($classes >= 2) $score = 1; else $score = 0;
+            $required_score = intval(get_option('scf_pw_strength_min', 0));
+            if ($required_score > 0 && $score < $required_score) {
+                $errors[] = sprintf(__('パスワード強度が不足しています。(必要:%d / 現在:%d)', 'simple-contact-form'), $required_score, $score);
+            }
+        }
         if ($password !== $password_confirm) $errors[] = __('パスワード（確認）が一致しません。', 'simple-contact-form');
         if (empty($username) && $email) {
             $username = sanitize_user(current(explode('@', $email)), true);
@@ -1018,6 +1068,23 @@ function scf_register_form_shortcode($atts) {
             <label for="scf_password_confirm"><?php esc_html_e('パスワード（確認）', 'simple-contact-form'); ?></label><br>
             <input type="password" name="scf_password_confirm" id="scf_password_confirm" required>
         </p>
+        <div class="scf-password-strength" style="margin:6px 0 12px;">
+            <div class="scf-strength-bar" style="height:6px;background:#eee;border-radius:3px;overflow:hidden;position:relative;">
+                <span class="scf-strength-fill" style="display:block;height:100%;width:0;background:#d9534f;transition:width .3s,background .3s;"></span>
+            </div>
+            <p class="scf-strength-text" style="font-size:12px;margin:4px 0 0;color:#666;">強度: -</p>
+        </div>
+        <div class="scf-password-policy">
+            <p style="margin:6px 0 4px;font-weight:bold;">パスワード要件:</p>
+            <ul style="list-style:disc;margin-left:20px;">
+                <li data-rule="length">8文字以上</li>
+                <li data-rule="upper">英大文字を含む (A-Z)</li>
+                <li data-rule="lower">英小文字を含む (a-z)</li>
+                <li data-rule="digit">数字を含む (0-9)</li>
+                <li data-rule="symbol">記号を含む (!@#$% など)</li>
+                <li data-rule="match">確認欄と一致</li>
+            </ul>
+        </div>
         <?php if ($sitekey) : ?>
             <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>"></div>
         <?php endif; ?>
