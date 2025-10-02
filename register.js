@@ -107,8 +107,10 @@
   $(document).on('focus','#scf_password,#scf_password_confirm', ensureShow);
   $(document).on('input','#scf_password,#scf_password_confirm', evaluate);
   $(function(){
-    // サーバー埋め込みされた閾値取得用 hidden/meta 等があれば将来利用
-    evaluate();
+    // 既にメッセージ要素が残っている場合（ページ再訪など）を初期で隠す
+    $('.scf-pw-threshold-msg').hide();
+    // 初期ロード時は何も表示しない（ユーザーが入力 or フォーカスしたときに初回評価）
+    // evaluate() の即時実行を避け、視覚的ノイズを減らす。
     // Submit時の最終ガード（Enterキー等でbutton disabledバイパス防止）
   $(document).on('submit','.scf-register-form', function(e){
       var p = $('#scf_password').val() || '';
