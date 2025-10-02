@@ -21,7 +21,9 @@ function scf_enqueue_scripts() {
         wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
     }
     // 会員登録用パスワードリアルタイムチェック（常時読み込みでも軽量）
-    wp_enqueue_script('scf-register', plugins_url('register.js', __FILE__), ['jquery'], '1.0.0', true);
+    $reg_js_path = plugin_dir_path(__FILE__) . 'register.js';
+    $reg_ver = file_exists($reg_js_path) ? filemtime($reg_js_path) : '1.0.1';
+    wp_enqueue_script('scf-register', plugins_url('register.js', __FILE__), ['jquery'], $reg_ver, true);
     // WordPress 同梱の zxcvbn を利用（ハンドル: zxcvbn-async または zxcvbn）
     if ( ! wp_script_is('zxcvbn-async','registered') && ! wp_script_is('zxcvbn','registered') ) {
         // フォールバックCDN（理想は WP 同梱利用だが環境差異考慮）

@@ -1,4 +1,6 @@
 (function($){
+  if(window.__scfRegisterBound){return;} // 二重バインド防止
+  window.__scfRegisterBound = true;
   var shown = false;
   var requiredScore = parseInt(window.scfPwRequiredScore || '0',10) || 0;
   function ensureShow(){
@@ -108,7 +110,7 @@
     // サーバー埋め込みされた閾値取得用 hidden/meta 等があれば将来利用
     evaluate();
     // Submit時の最終ガード（Enterキー等でbutton disabledバイパス防止）
-    $('.scf-register-form').on('submit', function(e){
+  $(document).on('submit','.scf-register-form', function(e){
       var p = $('#scf_password').val() || '';
       var c = $('#scf_password_confirm').val() || '';
       var rules = {
@@ -145,7 +147,7 @@
       }
       if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)){
         needBlock = true;
-        $msg.text('パスワード要件をすべて満たしてください。'+(unmet.length?' 未達: '+unmet.join(' / '):''))+''; // text already set above maybe; ensure final message
+        $msg.text('パスワード要件をすべて満たしてください。'+(unmet.length?' 未達: '+unmet.join(' / '):''));
         $msg.show();
       }
       if(needBlock){
