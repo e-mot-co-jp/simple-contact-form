@@ -107,5 +107,57 @@
   $(function(){
     // サーバー埋め込みされた閾値取得用 hidden/meta 等があれば将来利用
     evaluate();
+    // Submit時の最終ガード（Enterキー等でbutton disabledバイパス防止）
+    $('.scf-register-form').on('submit', function(e){
+      var p = $('#scf_password').val() || '';
+      var c = $('#scf_password_confirm').val() || '';
+      var rules = {
+        length: p.length >= 8,
+        upper: /[A-Z]/.test(p),
+        lower: /[a-z]/.test(p),
+        digit: /\d/.test(p),
+        symbol: /[^A-Za-z0-9]/.test(p),
+        match: p !== '' && p === c
+      };
+      var score = (function(){
+        if(!p) return 0;
+        if(typeof zxcvbn === 'function'){
+          try { return zxcvbn(p).score; } catch(e){ return 0; }
+        } else {
+          var s=0; if(/[A-Z]/.test(p)) s++; if(/[a-z]/.test(p)) s++; if(/\d/.test(p)) s++; if(/[^A-Za-z0-9]/.test(p)) s++; if(p.length>=12) s++; return Math.min(4, Math.floor(s/5*4));
+        }
+      })();
+      var unmet = [];
+      if(!rules.length) unmet.push('8文字以上');
+      if(!rules.upper) unmet.push('英大文字');
+      if(!rules.lower) unmet.push('英小文字');
+      if(!rules.digit) unmet.push('数字');
+      if(!rules.symbol) unmet.push('記号');
+      if(!rules.match) unmet.push('確認用と一致');
+      var $msg = $('.scf-pw-threshold-msg');
+      if(!$msg.length){
+        $msg = $('<p class="scf-pw-threshold-msg" style="margin:6px 0 0;font-size:12px;color:#c00;"></p>').insertAfter('.scf-password-helper');
+      }
+      var needBlock = false;
+      if(requiredScore > 0 && score < requiredScore){
+        needBlock = true;
+        $msg.text('パスワード強度が不足しています (必要:'+requiredScore+' / 現在:'+score+')'+(unmet.length?' 未達: '+unmet.join(' / '):'')).show();
+      }
+      if(!(rules.length && rules.upper && rules.lower && rules.digit && rules.symbol && rules.match)){
+        needBlock = true;
+        $msg.text('パスワード要件をすべて満たしてください。'+(unmet.length?' 未達: '+unmet.join(' / '):''))+''; // text already set above maybe; ensure final message
+        $msg.show();
+      }
+      if(needBlock){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        // ボタンも無効化状態に揃える
+        $('.scf-register-form button[type="submit"]').prop('disabled', true).css({opacity:.6,cursor:'not-allowed'});
+        return false;
+      }
+      // ここまで来たら送信OK（再確認でボタンを有効化）
+      $('.scf-register-form button[type="submit"]').prop('disabled', false).css({opacity:1,cursor:'pointer'});
+      return true;
+    });
   });
 })(jQuery);
