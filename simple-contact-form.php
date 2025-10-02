@@ -1470,7 +1470,17 @@ function scf_wc_account_social_connections_endpoint(){
     echo '<p>'.esc_html__('SNSアカウントを連携すると次回以降ワンクリックでログインできます。','simple-contact-form').'</p>';
     if (shortcode_exists('nextend_social_login')) {
         // A: Connect UI 表示 (providers 未指定で有効プロバイダ全部 / 指定したい場合は設定で上書き)
-        echo '<div class="scf-social-connect-block">'.do_shortcode('[nextend_social_login connect="1"]').'</div>';
+        $scf_nextend_html = do_shortcode('[nextend_social_login connect="1"]');
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('[SCF SocialLink] rendered nextend_social_login connect=1 length='.strlen(trim(strip_tags($scf_nextend_html))));
+        }
+        if (trim($scf_nextend_html) === '') {
+            echo '<div class="scf-social-connect-block scf-nextend-empty" style="border:1px dashed #ccc;padding:16px;">';
+            echo '<p style="margin:0;color:#666;font-size:13px;">ソーシャルログイン短コードは検出されましたが表示要素が空です。Nextend プラグイン設定(有効プロバイダ/表示条件)を確認してください。</p>';
+            echo '</div>';
+        } else {
+            echo '<div class="scf-social-connect-block">'.$scf_nextend_html.'</div>';
+        }
     } else {
         echo '<p style="color:#666;">'.esc_html__('ソーシャルログインプラグインが有効ではありません。','simple-contact-form').'</p>';
     }
