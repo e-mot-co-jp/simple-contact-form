@@ -1355,3 +1355,114 @@ function scf_filter_wc_errors_remove_cfturnstile($errors){
 }
 add_filter('woocommerce_registration_errors','scf_filter_wc_errors_remove_cfturnstile', 5, 1);
 
+/* --------------------------------------------------------------
+ * A/B/C/D: 既存ユーザーによるソーシャルアカウント後付け連携機能
+ *  A: 接続 UI (Connect) をマイアカウントへ表示
+ *  B: パスワード未設定ユーザーは Disconnect ボタンを隠す (孤立防止)
+ *  C: 独自エンドポイント /my-account/social-connections/ 追加
+ *  D: メール一致自動リンクを "verified メール" のみ許可する安全ガード
+ * -------------------------------------------------------------- */
+
+// D: メール一致自動リンク安全ガード (Nextend フィルタ) - email_verified が真の場合のみ既存ユーザーへリンク
+if ( ! function_exists('scf_nsl_verified_email_autolink') ) {
+    add_filter('nsl_login_user', function($user, $userdata){
+        // 既に確定済みならそのまま
+        if ($user instanceof WP_User) return $user;
+        // Nextend が渡す構造はバージョンで差異あり。email/email_verified を想定。
+        $email  = isset($userdata['email']) ? sanitize_email($userdata['email']) : '';
+        $verified = false;
+        if (isset($userdata['email_verified'])) {
+            $verified = (bool)$userdata['email_verified'];
+        } elseif (isset($userdata['verified'])) { // フォールバックキー
+            $verified = (bool)$userdata['verified'];
+        }
+        if ($email && $verified) {
+            $existing = get_user_by('email', $email);
+            if ($existing && $existing->ID) {
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('[SCF SocialLink] auto-link by verified email user_id='.$existing->ID.' email='.$email);
+                }
+                return $existing; // 自動リンク
+            }
+        }
+        return $user; // 条件に合わなければ Nextend の既定処理へ
+    }, 10, 2);
+}
+
+// C: WooCommerce マイアカウントへ /social-connections エンドポイント追加
+function scf_register_social_connections_endpoint(){
+    if ( function_exists('add_rewrite_endpoint') ) {
+        add_rewrite_endpoint('social-connections', EP_ROOT | EP_PAGES);
+    }
+}
+add_action('init','scf_register_social_connections_endpoint');
+
+// マイアカウント メニュー項目追加
+function scf_wc_social_connections_menu_items($items){
+    if (!is_user_logged_in()) return $items;
+    // dashboard の直後に挿入
+    $new = [];
+    foreach ($items as $k=>$v){
+        $new[$k]=$v;
+        if ($k==='dashboard') {
+            $new['social-connections'] = __('ソーシャル連携', 'simple-contact-form');
+        }
+    }
+    return $new;
+}
+add_filter('woocommerce_account_menu_items','scf_wc_social_connections_menu_items');
+
+// C: コンテンツ描画
+function scf_wc_account_social_connections_endpoint(){
+    if ( ! is_user_logged_in() ) return;
+    echo '<h2>'.esc_html__('ソーシャルアカウント連携','simple-contact-form').'</h2>';
+    echo '<p>'.esc_html__('SNSアカウントを連携すると次回以降ワンクリックでログインできます。','simple-contact-form').'</p>';
+    if (shortcode_exists('nextend_social_login')) {
+        // A: Connect UI 表示 (providers 未指定で有効プロバイダ全部 / 指定したい場合は設定で上書き)
+        echo '<div class="scf-social-connect-block">'.do_shortcode('[nextend_social_login connect="1"]').'</div>';
+    } else {
+        echo '<p style="color:#666;">'.esc_html__('ソーシャルログインプラグインが有効ではありません。','simple-contact-form').'</p>';
+    }
+    // B: パスワード未設定なら Disconnect ボタンを JS/CSS で抑制
+    $user = wp_get_current_user();
+    $has_password = !empty($user->user_pass);
+    if (!$has_password) {
+        // Nextend の Disconnect ボタンが nsl-button-disconnect を含む想定で非表示
+        echo '<style>.scf-social-connect-block .nsl-button-disconnect{display:none!important;}</style>';
+        echo '<p style="margin-top:16px;color:#d33;font-size:12px;">'.esc_html__('現在パスワード未設定のため、既存連携の解除は表示されません。','simple-contact-form').'</p>';
+    }
+    do_action('scf_after_social_connections_block', $user);
+}
+add_action('woocommerce_account_social-connections_endpoint','scf_wc_account_social_connections_endpoint');
+
+// A: ダッシュボードにも簡易表示（任意。重複が嫌ならコメントアウト可）
+function scf_wc_account_dashboard_social_snippet(){
+    if ( ! is_user_logged_in() ) return;
+    if ( ! shortcode_exists('nextend_social_login') ) return;
+    echo '<section class="scf-social-connect-mini" style="margin:24px 0;padding:16px;border:1px solid #e2e2e2;border-radius:8px;">';
+    echo '<h3 style="margin:0 0 10px;font-size:16px;">'.esc_html__('ソーシャル連携','simple-contact-form').'</h3>';
+    echo do_shortcode('[nextend_social_login connect="1"]');
+    echo '<p style="margin:8px 0 0;font-size:12px;color:#666;">'.esc_html__('詳細な管理は「ソーシャル連携」メニューへ。','simple-contact-form').'</p>';
+    echo '</section>';
+}
+add_action('woocommerce_account_dashboard','scf_wc_account_dashboard_social_snippet', 25);
+
+// B: Disconnect ボタン抑止をログインフォームや他箇所でも適用したい場合のヘルパー（任意拡張）
+function scf_maybe_hide_disconnect_globally(){
+    if ( ! is_user_logged_in() ) return;
+    $user = wp_get_current_user();
+    if ( empty($user->user_pass) ) {
+        echo '<style>.nsl-button.nsl-button-disconnect{display:none!important;}</style>';
+    }
+}
+add_action('wp_head','scf_maybe_hide_disconnect_globally', 120);
+
+// 接続/解除ログ（デバッグ用途）
+add_action('nsl_user_connected_provider', function($provider,$user_id,$profile){
+    if (defined('WP_DEBUG') && WP_DEBUG) error_log('[SCF SocialLink] connected provider='.$provider.' user_id='.$user_id);
+}, 10, 3);
+add_action('nsl_user_unlinked_provider', function($provider,$user_id){
+    if (defined('WP_DEBUG') && WP_DEBUG) error_log('[SCF SocialLink] disconnected provider='.$provider.' user_id='.$user_id);
+}, 10, 2);
+
+
