@@ -989,6 +989,9 @@ function scf_register_form_shortcode($atts) {
     }
     $errors = [];
     if ('POST' === $_SERVER['REQUEST_METHOD'] && isset($_POST['scf_register_nonce']) && wp_verify_nonce($_POST['scf_register_nonce'], 'scf_register')) {
+        if ( ! defined('SCF_REGISTER_FORM_SUBMISSION') ) {
+            define('SCF_REGISTER_FORM_SUBMISSION', true); // 競合バイパス用コンテキストフラグ
+        }
         $email = isset($_POST['scf_email']) ? sanitize_email($_POST['scf_email']) : '';
         $username = isset($_POST['scf_username']) ? sanitize_user($_POST['scf_username']) : '';
         $password = isset($_POST['scf_password']) ? $_POST['scf_password'] : '';
@@ -1027,6 +1030,7 @@ function scf_register_form_shortcode($atts) {
         }
         // Turnstile verification (if enabled)
         $secret = scf_get_turnstile_secret();
+        $scf_turnstile_verified = false; // ローカルフラグ
         if ($secret) {
             $token = '';
             $candidate_keys = [ 'cf-turnstile-response','cf_turnstile_response','turnstile-response' ];
@@ -1050,6 +1054,10 @@ function scf_register_form_shortcode($atts) {
                         }
                     }
                     $errors[] = $msg;
+                }
+                if ($ok) {
+                    $scf_turnstile_verified = true;
+                    $GLOBALS['scf_turnstile_verified'] = true; // フィルター側参照
                 }
             }
         }
@@ -1277,4 +1285,26 @@ function scf_force_customer_role_for_social($user_id){
     do_action('scf_user_promoted_to_customer_from_social', $user_id);
 }
 add_action('user_register','scf_force_customer_role_for_social', 200);
+
+/**
+ * WooCommerce 登録エラーから競合プラグイン(simple-cloudflare-turnstile)が追加した
+ * cfturnstile_error ("人間であることを確認してください。") を、既に当プラグイン側で
+ * Turnstile 成功検証済みの場合に除去する。
+ */
+function scf_filter_wc_errors_remove_cfturnstile($errors){
+    if ( empty($errors) || ! is_object($errors) ) return $errors;
+    // 成功検証フラグが無い / 当プラグインフォーム以外なら何もしない
+    if ( empty($GLOBALS['scf_turnstile_verified']) || ! defined('SCF_REGISTER_FORM_SUBMISSION') ) return $errors;
+    if ( method_exists($errors, 'get_error_codes') ) {
+        $codes = $errors->get_error_codes();
+        if ( in_array('cfturnstile_error', $codes, true) ) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[SCF TurnstileDBG] removing cfturnstile_error (duplicate validation)');
+            }
+            $errors->remove('cfturnstile_error');
+        }
+    }
+    return $errors;
+}
+add_filter('woocommerce_registration_errors','scf_filter_wc_errors_remove_cfturnstile', 5, 1);
 
