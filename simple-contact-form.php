@@ -1397,6 +1397,57 @@ function scf_register_social_connections_endpoint(){
 }
 add_action('init','scf_register_social_connections_endpoint');
 
+// プラグイン有効化時に rewrite ルールを再生成（/my-account/social-connections/ を有効化）
+if ( function_exists('register_activation_hook') ) {
+    register_activation_hook(__FILE__, function(){
+        // 念のためエンドポイント登録後に flush
+        scf_register_social_connections_endpoint();
+        flush_rewrite_rules(false);
+        update_option('scf_social_connections_endpoint_last_flush', time());
+    });
+}
+// 無効化時にルールを元に戻す（過剰 flush 防止のため一回のみ）
+if ( function_exists('register_deactivation_hook') ) {
+    register_deactivation_hook(__FILE__, function(){
+        flush_rewrite_rules(false);
+    });
+}
+
+// 既に稼働中の環境で activation フックが走らないままコード追加されたケースを救済: 一度だけ自動 flush
+add_action('init', function(){
+    // 一度も自動修復していない & ルールに social-connections が無いなら (管理画面アクセス前でも) 一回だけ flush
+    if ( ! get_option('scf_social_connections_endpoint_autofixed') ) {
+        $rules = get_option('rewrite_rules');
+        $has = false;
+        if ( is_array($rules) ) {
+            foreach($rules as $regex=>$query){
+                if (strpos($regex,'social-connections') !== false || strpos($query,'social-connections') !== false){
+                    $has = true; break;
+                }
+            }
+        } elseif ( is_string($rules) ) {
+            $has = (strpos($rules,'social-connections') !== false);
+        }
+        if ( ! $has ) {
+            scf_register_social_connections_endpoint();
+            flush_rewrite_rules(false);
+            update_option('scf_social_connections_endpoint_last_flush', time());
+            if ( defined('WP_DEBUG') && WP_DEBUG ) {
+                error_log('[SCF SocialLink] auto flushed rewrite rules (front-end) for social-connections endpoint');
+            }
+        }
+        update_option('scf_social_connections_endpoint_autofixed', 1);
+    }
+}, 30);
+
+// WooCommerce が内部でクエリ変数を解釈できるよう明示的に登録 (一部環境の競合回避)
+add_filter('woocommerce_get_query_vars', function($vars){
+    if (! isset($vars['social-connections'])) {
+        $vars['social-connections'] = 'social-connections';
+    }
+    return $vars;
+});
+
 // マイアカウント メニュー項目追加
 function scf_wc_social_connections_menu_items($items){
     if (!is_user_logged_in()) return $items;
