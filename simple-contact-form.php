@@ -969,18 +969,64 @@ function scf_login_form_shortcode($atts) {
         return '<p>' . esc_html__('ログイン中です。', 'simple-contact-form') . '</p>';
     }
     $redirect = isset($_GET['redirect_to']) ? esc_url_raw($_GET['redirect_to']) : ( function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : home_url('/my-account/') );
+    // 失敗フラグと前回ユーザー名
+    $failed = ( isset($_GET['scf_login']) && $_GET['scf_login'] === 'failed' );
+    $attempt_user = isset($_GET['u']) ? sanitize_user(wp_unslash($_GET['u']), true) : '';
     $args = [
-        'redirect' => $redirect,
+        'redirect'       => $redirect,
         'label_username' => __('Eメールまたはユーザー名', 'simple-contact-form'),
-        'label_log_in' => __('ログイン', 'simple-contact-form'),
+        'label_log_in'   => __('ログイン', 'simple-contact-form'),
+        'value_username' => $attempt_user,
+        // password / remember はデフォルト
     ];
+    // このフォーム由来を識別する hidden フィールドを差し込むフィルターを一時追加
+    $hidden_cb = function($content, $cb_args){
+        return $content . '<input type="hidden" name="scf_custom_login" value="1" />';
+    };
+    add_filter('login_form_middle', $hidden_cb, 10, 2);
     ob_start();
-    //echo scf_render_social_login_block();
+    if ($failed) {
+        echo '<div class="scf-login-errors"><p class="scf-error" style="color:#b32d2e;">' . esc_html__('ユーザー名またはパスワードが正しくありません。', 'simple-contact-form') . '</p></div>';
+    }
     wp_login_form($args);
+    remove_filter('login_form_middle', $hidden_cb, 10);
     return ob_get_clean();
 }
 add_shortcode('scf_login_form', 'scf_login_form_shortcode');
 add_shortcode('mot_login_form', 'scf_login_form_shortcode'); // backward compatibility
+
+/**
+ * ログイン失敗時にデフォルトの wp-login.php へ留まらず /login/ (ショートコードページ) へ戻す。
+ * フォームに挿入した hidden フィールド scf_custom_login=1 で当プラグインフォーム由来を判定。
+ */
+function scf_login_failed_redirect($username){
+    // POST が無ければ（他経路/API）スキップ
+    if (empty($_POST) || !isset($_POST['scf_custom_login'])) {
+        return; // WooCommerce や 他プラグイン用ログインは影響しない
+    }
+    // redirect_to のバリデーション
+    $redirect_to = '';
+    if (isset($_POST['redirect_to'])) {
+        $candidate = esc_url_raw(wp_unslash($_POST['redirect_to']));
+        $validated = wp_validate_redirect($candidate, '');
+        if ($validated) $redirect_to = $validated;
+    }
+    $params = [ 'scf_login' => 'failed' ];
+    if ($username) {
+        $params['u'] = rawurlencode($username);
+    }
+    if ($redirect_to) {
+        $params['redirect_to'] = rawurlencode($redirect_to);
+    }
+    $login_page = home_url('/login/');
+    $url = add_query_arg($params, $login_page);
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('[SCF LoginDBG] failed login for '.$username.' redirecting to '.$url);
+    }
+    wp_safe_redirect($url);
+    exit;
+}
+add_action('wp_login_failed', 'scf_login_failed_redirect', 1, 1);
 
 // Registration form shortcode
 function scf_register_form_shortcode($atts) {
