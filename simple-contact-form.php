@@ -104,9 +104,25 @@ function scf_render_form($atts = []) {
             };
             </script>
         <?php endif; ?>
-        <button type="submit">送信</button>
+        <button type="submit" class="scf-btn-primary" data-scf-phase="input">確認</button>
     </form>
-    <div class="scf-message"></div>
+    <div class="scf-confirm" style="display:none;">
+        <h3 style="margin-top:0;">入力内容の確認</h3>
+        <div class="scf-confirm-table"></div>
+        <div class="scf-confirm-actions" style="margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;">
+            <button type="button" class="scf-btn-back" style="background:#777;">修正する</button>
+            <button type="button" class="scf-btn-send" style="background:#0073aa;">送信</button>
+        </div>
+    </div>
+    <div class="scf-complete" style="display:none;">
+        <h3 style="margin-top:0;">送信が完了しました</h3>
+        <div class="scf-complete-message"></div>
+        <div style="margin-top:24px;">
+            <a href="/" class="scf-btn-top" style="display:inline-block;background:#0073aa;color:#fff;padding:10px 28px;border-radius:4px;text-decoration:none;">トップに戻る</a>
+        </div>
+    </div>
+    <div class="scf-message" style="margin-top:16px;"></div>
+    <script>window.scfHomeUrl = <?php echo json_encode( home_url('/') ); ?>;</script>
     <script>window.scfFileThumb = window.scfFileThumb || {}; window.scfFileThumb.pdfIcon = <?php echo json_encode($pdf_icon); ?>;</script>
     <?php
     return ob_get_clean();

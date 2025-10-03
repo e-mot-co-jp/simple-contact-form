@@ -99,6 +99,17 @@
 	font-weight: bold;
 	font-size: 1rem;
 }
+.scf-confirm, .scf-complete {
+	background:#fff;
+	padding:24px 16px;
+	border-radius:8px;
+	box-sizing:border-box;
+}
+.scf-confirm-table-inner th, .scf-confirm-table-inner td { font-size:0.95rem; }
+.scf-confirm-actions button { min-width:140px; }
+.scf-confirm-actions .scf-btn-send[disabled] { opacity:.6; cursor: not-allowed; }
+.scf-complete-message { font-size:1.05rem; line-height:1.6; }
+.scf-btn-top:hover { background:#005177; }
 .scf-required {
 	display: inline-block;
 	background: #e53935;
