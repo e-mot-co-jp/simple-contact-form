@@ -175,6 +175,30 @@ function scf_create_table() {
 }
 
 /**
+ * テーブルスキーマ自動アップグレード
+ * 旧バージョンで不足しているカラム (is_spam, spam_note, spam_engine, files, created) を追加。
+ */
+function scf_upgrade_table_schema(){
+    global $wpdb; $table = $wpdb->prefix.'scf_inquiries';
+    if( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) return; // 未作成なら create 側に任せる
+    $cols = $wpdb->get_results("DESCRIBE $table");
+    if( ! $cols ) return;
+    $have = [];
+    foreach($cols as $c){ $have[$c->Field] = true; }
+    $alters = [];
+    if( empty($have['files']) )      $alters[] = 'ADD files TEXT AFTER content';
+    if( empty($have['is_spam']) )     $alters[] = 'ADD is_spam TINYINT(1) DEFAULT 0 AFTER files';
+    if( empty($have['spam_note']) )   $alters[] = 'ADD spam_note TEXT AFTER is_spam';
+    if( empty($have['spam_engine']) ) $alters[] = 'ADD spam_engine VARCHAR(64) AFTER spam_note';
+    if( empty($have['created']) )     $alters[] = 'ADD created DATETIME DEFAULT CURRENT_TIMESTAMP AFTER spam_engine';
+    if( $alters ){
+        $sql = 'ALTER TABLE '.$table.' '.implode(', ', $alters);
+        $wpdb->query($sql);
+        if( defined('WP_DEBUG') && WP_DEBUG ) error_log('[scf] schema upgraded: '.$sql.' error='.$wpdb->last_error);
+    }
+}
+
+/**
  * Simple spam check. Returns array: [is_spam(bool), engine(string), note(string)].
  * - By default performs keyword check in PHP.
  * - If option 'scf_use_python_spam' is true and 'scf_python_path' is set, it will attempt to call Python script and prefer its result.
@@ -400,6 +424,7 @@ function scf_admin_inquiry_list_page() {
     $table = $wpdb->prefix . 'scf_inquiries';
     // attempt to create table if missing
     scf_create_table();
+    scf_upgrade_table_schema();
     echo '<div class="wrap"><h1>お問い合わせ管理</h1>';
     if ($wpdb->get_var("SHOW TABLES LIKE '$table'") != $table) {
         echo '<div class="notice notice-warning"><p>データベーステーブル ' . esc_html($table) . ' が存在しません。プラグインを再有効化してください。</p></div></div>';
