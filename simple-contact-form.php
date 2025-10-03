@@ -199,6 +199,17 @@ function scf_upgrade_table_schema(){
 }
 
 /**
+ * init 早期にテーブルスキーマを保証（既存環境で activation hook が走らないケース対策）
+ */
+function scf_ensure_inquiries_table_schema(){
+    // インストール処理中や CLI / Cron の極端な早期フェーズでは不要
+    if ( defined('WP_INSTALLING') && WP_INSTALLING ) return;
+    scf_create_table();
+    scf_upgrade_table_schema();
+}
+add_action('init','scf_ensure_inquiries_table_schema',1);
+
+/**
  * Simple spam check. Returns array: [is_spam(bool), engine(string), note(string)].
  * - By default performs keyword check in PHP.
  * - If option 'scf_use_python_spam' is true and 'scf_python_path' is set, it will attempt to call Python script and prefer its result.
@@ -794,8 +805,9 @@ add_action('init', function() {
         // お問い合わせ番号生成
         $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
 
-    // Ensure table exists before insert
+    // Ensure table & schema exists before insert (旧バージョン -> 新バージョン移行時の不足カラム対策)
     scf_create_table();
+    scf_upgrade_table_schema();
     // spam 判定（DBに保存する値を先に決める）
     $combined_for_spam = trim(
         sanitize_text_field($_POST['scf_inquiry']) . " \n" .
@@ -806,7 +818,7 @@ add_action('init', function() {
     // DB保存
         global $wpdb;
         $table = $wpdb->prefix . 'scf_inquiries';
-        $wpdb->insert($table, [
+        $scf_insert_data = [
             'inquiry_no' => $inquiry_no,
             'name' => sanitize_text_field($_POST['scf_name']),
             'email' => sanitize_email($_POST['scf_email']),
@@ -822,10 +834,17 @@ add_action('init', function() {
             'is_spam' => $is_spam_flag ? 1 : 0,
             'spam_note' => $spam_note,
             'spam_engine' => $spam_engine,
-        ]);
-        // Diagnostic logging: record insert id and any DB error
+        ];
+        $wpdb->insert($table, $scf_insert_data);
+        $scf_retry = false;
+        if ( $wpdb->last_error && strpos($wpdb->last_error, 'Unknown column') !== false ) {
+            // カラム不足がまだ残っている可能性 -> 再アップグレードして 1 回だけリトライ
+            scf_upgrade_table_schema();
+            $wpdb->insert($table, $scf_insert_data);
+            $scf_retry = true;
+        }
         if ( defined('WP_DEBUG') && WP_DEBUG ) {
-            error_log('[scf] inserted id=' . intval($wpdb->insert_id));
+            error_log('[scf] inserted id=' . intval($wpdb->insert_id) . ($scf_retry ? ' (retry='.($wpdb->last_error?'fail':'ok').')' : ''));
             if ( $wpdb->last_error ) {
                 error_log('[scf] db error: ' . $wpdb->last_error);
             }
