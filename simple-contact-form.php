@@ -95,7 +95,7 @@ function scf_render_form($atts = []) {
         <?php if ( get_option('scf_turnstile_enabled', 0) ) :
             $sitekey = esc_attr( get_option('scf_turnstile_sitekey', '0x4AAAAAAB4PWT_eW58sqk4P') );
         ?>
-            <div class="cf-turnstile" data-sitekey="<?php echo $sitekey; ?>" data-theme="light"></div>
+            <div class="cf-turnstile" data-sitekey="<?php echo $sitekey; ?>" data-theme="light" data-callback="__scf_turnstile_callback"></div>
             <input type="hidden" name="cf_turnstile_token" id="cf_turnstile_token" value="">
             <script>
             window.__scf_turnstile_callback = function(token) {
