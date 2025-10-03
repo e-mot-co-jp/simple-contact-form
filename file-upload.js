@@ -62,6 +62,10 @@ jQuery(function($){
   // 送信時にFormDataでファイルも送信
   $('.scf-form').off('submit').on('submit', function(e){
     e.preventDefault();
+    if(window.scfTwoStepFlow){
+      // 二段階フロー有効時は validate.js が制御するためここで送信しない
+      return false;
+    }
     var $form = $(this);
     var msg = '';
     var email = $form.find('[name="scf_email"]').val();

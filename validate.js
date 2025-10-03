@@ -33,7 +33,7 @@ jQuery(function($){
       }
     });
     if(msg){
-      $message.text(msg).css('color','red');
+      showModal(msg.replace(/\n/g,'<br>'), true);
       return false;
     }
     return true;
@@ -114,7 +114,9 @@ jQuery(function($){
   $confirm.on('click', '.scf-btn-send', function(){
     if(phase !== 'confirm') return;
     phase = 'sending';
-    $message.text('送信中...').css('color','#333');
+    const $btn = $(this).addClass('loading');
+    $btn.data('original-text',$btn.text());
+    $message.text('');
     const formData = new FormData($form[0]);
     formData.append('scf_ajax','1');
     $.ajax({
@@ -130,16 +132,35 @@ jQuery(function($){
           // フォーム初期化
           $form[0].reset();
           $('.scf-file-list').empty();
+          showModal('送信が完了しました。<br>お問い合わせ番号: ' + (res.data && res.data.message ? '' : ''), false); // 詳細メッセージはcomplete画面に表示済み
         } else {
           phase = 'confirm';
           const err = res && res.data && res.data.message ? res.data.message : '送信に失敗しました。';
-            $message.html(err.replace(/\n/g,'<br>')).css('color','red');
+          showModal(err.replace(/\n/g,'<br>'), true);
         }
+        $('.scf-btn-send').removeClass('loading');
       },
       error: function(){
         phase = 'confirm';
-        $message.text('送信に失敗しました。').css('color','red');
+        showModal('送信に失敗しました。', true);
+        $('.scf-btn-send').removeClass('loading');
       }
     });
   });
+
+  /* =====================
+   * Modal Helpers
+   * ===================== */
+  const $modal = $('.scf-modal');
+  const $modalBody = $modal.find('.scf-modal-body');
+  function showModal(html, isError){
+    $modalBody.html('<div class="'+(isError?'scf-modal-error':'scf-modal-info')+'">'+html+'</div>');
+    $modal.fadeIn(120);
+  }
+  function closeModal(){
+    $modal.fadeOut(120);
+  }
+  $modal.on('click','.scf-modal-close', closeModal);
+  $modal.on('click','.scf-modal-overlay', closeModal);
+  $(document).on('keydown', function(e){ if(e.key==='Escape' && $modal.is(':visible')) closeModal(); });
 });

@@ -110,6 +110,24 @@
 .scf-confirm-actions .scf-btn-send[disabled] { opacity:.6; cursor: not-allowed; }
 .scf-complete-message { font-size:1.05rem; line-height:1.6; }
 .scf-btn-top:hover { background:#005177; }
+
+/* Modal */
+.scf-modal { position:fixed; inset:0; z-index:9999; }
+.scf-modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,.45); backdrop-filter:blur(2px); }
+.scf-modal-dialog { position:relative; max-width:560px; width:92%; background:#fff; margin:8vh auto 0; padding:28px 26px 24px; border-radius:10px; box-shadow:0 6px 22px -4px rgba(0,0,0,.25); animation:scfModalIn .28s ease; }
+.scf-modal-body { font-size:.95rem; line-height:1.6; word-break:break-word; }
+.scf-modal-actions { text-align:right; margin-top:20px; }
+.scf-modal-actions button { background:#0073aa; color:#fff; border:none; padding:8px 22px; border-radius:4px; cursor:pointer; }
+.scf-modal-actions button:hover { background:#005177; }
+@keyframes scfModalIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+/* Spinner */
+.scf-loading-inline { display:inline-flex; align-items:center; gap:8px; }
+.scf-spinner { width:18px; height:18px; border:3px solid #fff; border-top-color:rgba(255,255,255,.2); border-radius:50%; animation:scfSpin .75s linear infinite; }
+@keyframes scfSpin { to { transform:rotate(360deg); } }
+.scf-btn-send.loading, .scf-btn-primary.loading { position:relative; opacity:.85; pointer-events:none; }
+.scf-btn-send.loading .scf-btn-text, .scf-btn-primary.loading .scf-btn-text { visibility:hidden; }
+.scf-btn-send.loading:after, .scf-btn-primary.loading:after { content:""; position:absolute; inset:0; margin:auto; width:20px; height:20px; border:3px solid #fff; border-top-color:rgba(255,255,255,.25); border-radius:50%; animation:scfSpin .7s linear infinite; }
 .scf-required {
 	display: inline-block;
 	background: #e53935;

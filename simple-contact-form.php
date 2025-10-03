@@ -123,6 +123,16 @@ function scf_render_form($atts = []) {
     </div>
     <div class="scf-message" style="margin-top:16px;"></div>
     <script>window.scfHomeUrl = <?php echo json_encode( home_url('/') ); ?>;</script>
+    <div class="scf-modal" style="display:none;">
+        <div class="scf-modal-overlay"></div>
+        <div class="scf-modal-dialog" role="dialog" aria-modal="true" aria-live="assertive">
+            <div class="scf-modal-body"></div>
+            <div class="scf-modal-actions">
+                <button type="button" class="scf-modal-close">閉じる</button>
+            </div>
+        </div>
+    </div>
+    <script>window.scfTwoStepFlow = true;</script>
     <script>window.scfFileThumb = window.scfFileThumb || {}; window.scfFileThumb.pdfIcon = <?php echo json_encode($pdf_icon); ?>;</script>
     <?php
     return ob_get_clean();
