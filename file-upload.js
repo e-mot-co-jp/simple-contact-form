@@ -60,49 +60,48 @@ jQuery(function($){
   }
 // PDFアイコンパスをグローバル変数で渡す（PHP側でwindow.scfFileThumb.pdfIconを出力すること）
   // 送信時にFormDataでファイルも送信
-  $('.scf-form').off('submit').on('submit', function(e){
-    e.preventDefault();
-    if(window.scfTwoStepFlow){
-      // 二段階フロー有効時は validate.js が制御するためここで送信しない
-      return false;
-    }
-    var $form = $(this);
-    var msg = '';
-    var email = $form.find('[name="scf_email"]').val();
-    var email2 = $form.find('[name="scf_email_confirm"]').val();
-    if(email !== email2){
-      msg += 'メールアドレスが一致しません。\n';
-    }
-    $form.find('[required]').each(function(){
-      if(!$(this).val()){
-        msg += $(this).closest('label').text().replace(/\*/g,'') + 'は必須です。\n';
+  // 二段階フローが無効な旧フォーム時のみ古い即時送信ロジックを適用
+  if(!window.scfTwoStepFlow){
+    $('.scf-form').off('submit').on('submit', function(e){
+      e.preventDefault();
+      var $form = $(this);
+      var msg = '';
+      var email = $form.find('[name="scf_email"]').val();
+      var email2 = $form.find('[name="scf_email_confirm"]').val();
+      if(email !== email2){
+        msg += 'メールアドレスが一致しません。\n';
       }
-    });
-    if(msg){
-      $('.scf-message').text(msg).css('color','red');
-      return false;
-    }
-    var formData = new FormData($form[0]);
-    formData.append('scf_ajax', '1');
-    $.ajax({
-      url: location.href,
-      type: 'POST',
-      data: formData,
-      processData: false,
-      contentType: false,
-      success: function(res){
-        if(res.success){
-          $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','green');
-          $form[0].reset();
-          fileList.empty();
-        }else{
-          $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','red');
+      $form.find('[required]').each(function(){
+        if(!$(this).val()){
+          msg += $(this).closest('label').text().replace(/\*/g,'') + 'は必須です。\n';
         }
-      },
-      error: function(){
-        $('.scf-message').text('送信に失敗しました。').css('color','red');
+      });
+      if(msg){
+        $('.scf-message').text(msg).css('color','red');
+        return false;
       }
+      var formData = new FormData($form[0]);
+      formData.append('scf_ajax', '1');
+      $.ajax({
+        url: location.href,
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res){
+          if(res.success){
+            $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','green');
+            $form[0].reset();
+            fileList.empty();
+          }else{
+            $('.scf-message').html(res.data.message.replace(/\n/g, '<br>')).css('color','red');
+          }
+        },
+        error: function(){
+          $('.scf-message').text('送信に失敗しました。').css('color','red');
+        }
+      });
+      return false;
     });
-    return false;
-  });
+  }
 });
