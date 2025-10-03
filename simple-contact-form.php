@@ -574,7 +574,8 @@ function scf_admin_inquiry_list_page() {
     echo '<table class="widefat fixed striped"><thead><tr>';
     echo '<th>日時</th><th>番号</th><th>お名前</th><th>メール</th><th>種別</th><th>内容（抜粋）</th><th>添付</th><th>判定</th></tr></thead><tbody>';
     foreach ($rows as $r) {
-        echo '<tr>';
+        $row_class = (isset($r->is_spam) && $r->is_spam) ? ' class="scf-row-spam"' : '';
+        echo '<tr'.$row_class.'>';
         echo '<td>' . esc_html($r->created) . '</td>';
         $view_url = admin_url('admin.php?page=scf_inquiry_view&inquiry_id=' . intval($r->id));
         echo '<td><a href="' . esc_url($view_url) . '">' . esc_html($r->inquiry_no) . '</a></td>';

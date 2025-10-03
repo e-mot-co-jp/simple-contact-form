@@ -111,6 +111,12 @@
 .scf-complete-message { font-size:1.05rem; line-height:1.6; }
 .scf-btn-top:hover { background:#005177; }
 
+/* ===== Spam Row (Inquiries List) ===== */
+tr.scf-row-spam { background:#2f2f2f !important; color:#ccc; }
+tr.scf-row-spam a { color:#9ad0ff !important; }
+tr.scf-row-spam:hover { background:#3a3a3a !important; }
+tr.scf-row-spam td, tr.scf-row-spam th { border-color:#444 !important; }
+
 /* ボタン文字色統一 */
 .scf-confirm-actions button,
 .scf-modal-actions button,
