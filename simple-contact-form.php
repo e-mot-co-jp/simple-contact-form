@@ -940,8 +940,8 @@ add_action('init', function() {
         wp_mail($user_email, $user_subject, $user_body, $user_headers, $uploaded_paths);
 
         if ($sent) {
-            $msg = '送信が完了しました。\nお問い合わせ番号: '.$inquiry_no.'\nご入力いただいたメールアドレス宛に控えを送信しました。';
-            $msg = nl2br($msg);
+            // 改行を実際の LF として埋め込み（JS側で \n -> <br> 変換）
+            $msg = "送信が完了しました。\nお問い合わせ番号: {$inquiry_no}\nご入力いただいたメールアドレス宛に控えを送信しました。";
             wp_send_json_success(['message' => $msg]);
         } else {
             wp_send_json_error(['message' => '送信に失敗しました。']);

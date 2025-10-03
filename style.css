@@ -111,6 +111,15 @@
 .scf-complete-message { font-size:1.05rem; line-height:1.6; }
 .scf-btn-top:hover { background:#005177; }
 
+/* ボタン文字色統一 */
+.scf-confirm-actions button,
+.scf-modal-actions button,
+.scf-btn-back,
+.scf-btn-send,
+.scf-form button {
+	color:#fff !important;
+}
+
 /* Modal */
 .scf-modal { position:fixed; inset:0; z-index:9999; }
 .scf-modal-overlay { position:absolute; inset:0; background:rgba(0,0,0,.45); backdrop-filter:blur(2px); }
