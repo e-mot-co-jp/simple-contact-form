@@ -1,0 +1,5 @@
+/* Admin specific styles for Simple Contact Form */
+tr.scf-row-spam { background:#2f2f2f !important; color:#ccc !important; }
+tr.scf-row-spam a { color:#9ad0ff !important; }
+tr.scf-row-spam:hover { background:#3a3a3a !important; }
+tr.scf-row-spam td, tr.scf-row-spam th { border-color:#444 !important; }

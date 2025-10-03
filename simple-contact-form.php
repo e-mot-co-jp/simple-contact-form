@@ -389,6 +389,13 @@ add_action('admin_menu', function() {
     );
 });
 
+// Admin styles (spam row highlighting etc.)
+add_action('admin_enqueue_scripts', function($hook){
+    if( isset($_GET['page']) && strpos($_GET['page'],'scf_inquiry_') === 0 ){
+        wp_enqueue_style('scf-admin', plugins_url('admin.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__).'admin.css'));
+    }
+});
+
 function scf_admin_inquiry_settings_page() {
     // 保存処理
     if (isset($_POST['scf_settings_nonce']) && wp_verify_nonce($_POST['scf_settings_nonce'], 'scf_settings')) {
