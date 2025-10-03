@@ -391,8 +391,19 @@ add_action('admin_menu', function() {
 
 // Admin styles (spam row highlighting etc.)
 add_action('admin_enqueue_scripts', function($hook){
-    if( isset($_GET['page']) && strpos($_GET['page'],'scf_inquiry_') === 0 ){
-        wp_enqueue_style('scf-admin', plugins_url('admin.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__).'admin.css'));
+    $page = isset($_GET['page']) ? $_GET['page'] : '';
+    if( strpos($page,'scf_inquiry_') === 0 ){
+        $handle = 'scf-admin';
+        $file   = plugin_dir_path(__FILE__).'admin.css';
+        if( file_exists($file) ){
+            wp_enqueue_style($handle, plugins_url('admin.css', __FILE__), [], filemtime($file));
+        }
+        // フォールバック: 何らかの最適化/結合で外れるケースに備えインライン再定義
+        $css = 'tr.scf-row-spam{background:#bbbbbb !important;color:#222 !important;}'
+             .'tr.scf-row-spam a{color:#004f7a !important;}'
+             .'tr.scf-row-spam:hover{background:#b2b2b2 !important;}'
+             .'tr.scf-row-spam td,tr.scf-row-spam th{border-color:#a2a2a2 !important;}';
+        wp_add_inline_style($handle, $css);
     }
 });
 
