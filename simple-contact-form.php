@@ -1,24 +1,4 @@
 <?php
-/**
- * spam_listテーブルの自動作成（id, inquiry_id, class, message, created）
- */
-function scf_create_spam_list_table() {
-    global $wpdb;
-    $table = $wpdb->prefix . 'spam_list';
-    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
-        $charset_collate = $wpdb->get_charset_collate();
-        $sql = "CREATE TABLE $table (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            inquiry_id BIGINT UNSIGNED,
-            class VARCHAR(16) DEFAULT 'ham',
-            message TEXT,
-            created DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
-        ) $charset_collate;";
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-    }
-}
 /*
 Plugin Name: Simple Contact Form
 Plugin URI: https://e-mot.co.jp/
@@ -37,6 +17,26 @@ Update URI: https://e-mot.co.jp/
 
 if (!defined('ABSPATH')) exit;
 
+/**
+ * spam_listテーブルの自動作成（id, inquiry_id, class, message, created）
+ */
+function scf_create_spam_list_table() {
+    global $wpdb;
+    $table = 'spam_list';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            inquiry_id BIGINT UNSIGNED,
+            class VARCHAR(16) DEFAULT 'ham',
+            message TEXT,
+            created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+}
 function scf_enqueue_scripts() {
     // 郵便番号→住所自動入力API（yubinbango.js）
     wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
@@ -940,7 +940,7 @@ add_action('init', function() {
 
     // spam_listへ自動登録
     if ($scf_inquiry_id) {
-        $spam_table = $wpdb->prefix . 'spam_list';
+        $spam_table = 'spam_list';
         $spam_class = $is_spam_flag ? 'spam' : 'ham';
         $spam_message = $combined_for_spam;
         $wpdb->insert($spam_table, [
