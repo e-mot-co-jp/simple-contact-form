@@ -3,7 +3,7 @@ Contributors: yu ishiga
 Tags: contact, form, file upload, yubinbango, address auto-fill
 Requires at least: 5.0
 Tested up to: 6.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -35,9 +35,16 @@ yubinbango.js（https://yubinbango.github.io/yubinbango/）を利用していま
 3. 送信完了画面
 
 == Changelog ==
+= 1.1.0 =
+* spam_listテーブル自動作成・自動登録機能を追加
+* 問合せごとのspam/ham判定履歴を管理画面から編集可能に
+
 = 1.0.0 =
 * 初回リリース
 
 == Upgrade Notice ==
+= 1.1.0 =
+* spam_list管理機能追加。アップグレード推奨。
+
 = 1.0.0 =
 * 初回リリース

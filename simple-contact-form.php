@@ -1,10 +1,29 @@
-
 <?php
+/**
+ * spam_listテーブルの自動作成（id, inquiry_id, class, message, created）
+ */
+function scf_create_spam_list_table() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'spam_list';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
+        $charset_collate = $wpdb->get_charset_collate();
+        $sql = "CREATE TABLE $table (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            inquiry_id BIGINT UNSIGNED,
+            class VARCHAR(16) DEFAULT 'ham',
+            message TEXT,
+            created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+    }
+}
 /*
 Plugin Name: Simple Contact Form
 Plugin URI: https://e-mot.co.jp/
 Description: シンプルなお問い合わせフォーム（ファイル添付・郵便番号→住所自動入力(yubinbango)対応）
-Version: 1.0.0
+Version: 1.1.0
 Author: Yu Ishiga
 Author URI: https://backcountry-works.com/
 Text Domain: simple-contact-form
@@ -395,6 +414,18 @@ add_action('admin_menu', function() {
         'scf_inquiry_view',
         'scf_admin_inquiry_view_page'
     );
+    // spam_list管理サブメニュー
+    add_submenu_page(
+        'scf_inquiry_list',
+        'spam_list管理',
+        'spam_list管理',
+        'manage_options',
+        'scf_spam_list',
+        function() {
+            require_once plugin_dir_path(__FILE__) . 'admin-spam-list.php';
+            scf_admin_spam_list_page();
+        }
+    );
 });
 
 // Admin styles (spam row highlighting etc.)
@@ -749,6 +780,8 @@ add_action('init', function() {
             wp_send_json_error(['message' => '無効なリクエストです。']);
             exit;
         }
+        // spam_listテーブルの自動作成（問合せ時に必ず存在するよう保証）
+        scf_create_spam_list_table();
         // Cloudflare Turnstile server-side verification (when enabled)
         if ( get_option('scf_turnstile_enabled', 0) ) {
             $token = isset($_POST['cf_turnstile_token']) ? trim($_POST['cf_turnstile_token']) : '';
@@ -855,8 +888,8 @@ add_action('init', function() {
         if (!empty($errors)) {
             wp_send_json_error(['message' => implode("\n", $errors)]);
         }
-        // お問い合わせ番号生成
-        $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
+    // お問い合わせ番号生成
+    $inquiry_no = date('ymd') . '-' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 4));
 
     // Ensure table & schema exists before insert (旧バージョン -> 新バージョン移行時の不足カラム対策)
     scf_create_table();
@@ -869,41 +902,58 @@ add_action('init', function() {
     );
     list($is_spam_flag, $spam_engine, $spam_note) = scf_check_spam($combined_for_spam);
     // DB保存
-        global $wpdb;
-        $table = $wpdb->prefix . 'scf_inquiries';
-        $scf_insert_data = [
-            'inquiry_no' => $inquiry_no,
-            'name' => sanitize_text_field($_POST['scf_name']),
-            'email' => sanitize_email($_POST['scf_email']),
-            'zip' => sanitize_text_field($_POST['scf_zip']),
-            'address' => sanitize_text_field($_POST['scf_address']),
-            'tel' => sanitize_text_field($_POST['scf_tel']),
-            'inquiry' => sanitize_text_field($_POST['scf_inquiry']),
-            'product' => sanitize_text_field($_POST['scf_product']),
-            'date' => sanitize_text_field($_POST['scf_date']),
-            'shop' => sanitize_text_field($_POST['scf_shop']),
-            'content' => sanitize_textarea_field($_POST['scf_content']),
-            'files' => $uploaded_info ? maybe_serialize($uploaded_info) : '',
-            'is_spam' => $is_spam_flag ? 1 : 0,
-            'spam_note' => $spam_note,
-            'spam_engine' => $spam_engine,
-        ];
+    global $wpdb;
+    $table = $wpdb->prefix . 'scf_inquiries';
+    $scf_insert_data = [
+        'inquiry_no' => $inquiry_no,
+        'name' => sanitize_text_field($_POST['scf_name']),
+        'email' => sanitize_email($_POST['scf_email']),
+        'zip' => sanitize_text_field($_POST['scf_zip']),
+        'address' => sanitize_text_field($_POST['scf_address']),
+        'tel' => sanitize_text_field($_POST['scf_tel']),
+        'inquiry' => sanitize_text_field($_POST['scf_inquiry']),
+        'product' => sanitize_text_field($_POST['scf_product']),
+        'date' => sanitize_text_field($_POST['scf_date']),
+        'shop' => sanitize_text_field($_POST['scf_shop']),
+        'content' => sanitize_textarea_field($_POST['scf_content']),
+        'files' => $uploaded_info ? maybe_serialize($uploaded_info) : '',
+        'is_spam' => $is_spam_flag ? 1 : 0,
+        'spam_note' => $spam_note,
+        'spam_engine' => $spam_engine,
+    ];
+    $wpdb->insert($table, $scf_insert_data);
+    $scf_inquiry_id = $wpdb->insert_id;
+    $scf_retry = false;
+    if ( $wpdb->last_error && strpos($wpdb->last_error, 'Unknown column') !== false ) {
+        // カラム不足がまだ残っている可能性 -> 再アップグレードして 1 回だけリトライ
+        scf_upgrade_table_schema();
         $wpdb->insert($table, $scf_insert_data);
-        $scf_retry = false;
-        if ( $wpdb->last_error && strpos($wpdb->last_error, 'Unknown column') !== false ) {
-            // カラム不足がまだ残っている可能性 -> 再アップグレードして 1 回だけリトライ
-            scf_upgrade_table_schema();
-            $wpdb->insert($table, $scf_insert_data);
-            $scf_retry = true;
+        $scf_inquiry_id = $wpdb->insert_id;
+        $scf_retry = true;
+    }
+    if ( defined('WP_DEBUG') && WP_DEBUG ) {
+        error_log('[scf] inserted id=' . intval($wpdb->insert_id) . ($scf_retry ? ' (retry='.($wpdb->last_error?'fail':'ok').')' : ''));
+        if ( $wpdb->last_error ) {
+            error_log('[scf] db error: ' . $wpdb->last_error);
         }
+    }
+
+    // spam_listへ自動登録
+    if ($scf_inquiry_id) {
+        $spam_table = $wpdb->prefix . 'spam_list';
+        $spam_class = $is_spam_flag ? 'spam' : 'ham';
+        $spam_message = $combined_for_spam;
+        $wpdb->insert($spam_table, [
+            'inquiry_id' => $scf_inquiry_id,
+            'class' => $spam_class,
+            'message' => $spam_message,
+        ]);
         if ( defined('WP_DEBUG') && WP_DEBUG ) {
-            error_log('[scf] inserted id=' . intval($wpdb->insert_id) . ($scf_retry ? ' (retry='.($wpdb->last_error?'fail':'ok').')' : ''));
-            if ( $wpdb->last_error ) {
-                error_log('[scf] db error: ' . $wpdb->last_error);
-            }
+            error_log('[scf] spam_list insert: inquiry_id=' . intval($scf_inquiry_id) . ' class=' . $spam_class);
         }
+    }
         // 管理者宛メール
-    $to = get_option('scf_support_mail', 'support@e-mot.co.jp');
+    $to = get_option('scf_support_mail', 'support@e-m.co.jp');
         $subject = '[お問い合わせ] ' . sanitize_text_field($_POST['scf_inquiry']) . '：' . $inquiry_no;
         $body = "お問い合わせ番号: {$inquiry_no}\n".
                 "お名前: {$_POST['scf_name']}\n".
@@ -1651,5 +1701,17 @@ add_action('nsl_user_connected_provider', function($provider,$user_id,$profile){
 add_action('nsl_user_unlinked_provider', function($provider,$user_id){
     if (defined('WP_DEBUG') && WP_DEBUG) error_log('[SCF SocialLink] disconnected provider='.$provider.' user_id='.$user_id);
 }, 10, 2);
+
+// ML retrain schedule
+if ( ! wp_next_scheduled( 'scf_ml_retrain_event' ) ) {
+    wp_schedule_event( strtotime('03:30:00'), 'daily', 'scf_ml_retrain_event' );
+}
+
+add_action( 'scf_ml_retrain_event', function() {
+    $ml_dir = '/home/xs683807/e-mot.co.jp/public_html/dev/wp-content/plugins/simple-contact-form/ml';
+    $python = '/home/xs683807/miniconda3/bin/python';
+    $cmd = "cd {$ml_dir} && PYTHON_BIN={$python} ./retrain_deploy.sh";
+    exec($cmd . ' > /dev/null 2>&1 &');
+});
 
 
