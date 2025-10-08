@@ -1,11 +1,19 @@
+
 <?php
 /*
 Plugin Name: Simple Contact Form
-Plugin URI: https://example.com/
+Plugin URI: https://e-mot.co.jp/
 Description: シンプルなお問い合わせフォーム（ファイル添付・郵便番号→住所自動入力(yubinbango)対応）
 Version: 1.0.0
 Author: e-mot
+Author URI: https://e-mot.co.jp/
 Text Domain: simple-contact-form
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Requires at least: 5.0
+Tested up to: 6.4
+Requires PHP: 7.2
+Update URI: https://e-mot.co.jp/
 */
 
 if (!defined('ABSPATH')) exit;
