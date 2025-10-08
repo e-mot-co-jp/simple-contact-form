@@ -6,7 +6,7 @@
  */
 function scf_admin_spam_list_page() {
     global $wpdb;
-    $table = $wpdb->prefix . 'spam_list';
+    $table = 'spam_list';
     // テーブル存在チェック
     if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
         echo '<div class="wrap"><h1>spam_list管理</h1><p>spam_listテーブルが存在しません。</p></div>';
