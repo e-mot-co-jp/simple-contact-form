@@ -1,3 +1,22 @@
+/**
+ * spam_listテーブルのスキーマ自動アップグレード（createdカラム追加）
+ */
+function scf_upgrade_spam_list_schema() {
+    global $wpdb;
+    $table = 'spam_list';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) return;
+    $cols = $wpdb->get_results("DESCRIBE $table");
+    if( ! $cols ) return;
+    $have = [];
+    foreach($cols as $c){ $have[$c->Field] = true; }
+    $alters = [];
+    if( empty($have['created']) ) $alters[] = 'ADD created DATETIME DEFAULT CURRENT_TIMESTAMP AFTER message';
+    if( $alters ){
+        $sql = 'ALTER TABLE '.$table.' '.implode(', ', $alters);
+        $wpdb->query($sql);
+        if( defined('WP_DEBUG') && WP_DEBUG ) error_log('[scf] spam_list schema upgraded: '.$sql.' error='.$wpdb->last_error);
+    }
+}
 <?php
 /*
 Plugin Name: Simple Contact Form
@@ -781,7 +800,8 @@ add_action('init', function() {
             exit;
         }
         // spam_listテーブルの自動作成（問合せ時に必ず存在するよう保証）
-        scf_create_spam_list_table();
+    scf_create_spam_list_table();
+    scf_upgrade_spam_list_schema();
         // Cloudflare Turnstile server-side verification (when enabled)
         if ( get_option('scf_turnstile_enabled', 0) ) {
             $token = isset($_POST['cf_turnstile_token']) ? trim($_POST['cf_turnstile_token']) : '';
