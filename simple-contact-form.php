@@ -24,36 +24,9 @@ require_once plugin_dir_path(__FILE__) . 'includes/admin-settings.php';
 require_once plugin_dir_path(__FILE__) . 'includes/module-ajax.php';
 require_once plugin_dir_path(__FILE__) . 'includes/module-auth.php';
 require_once plugin_dir_path(__FILE__) . 'includes/module-ml.php';
+require_once plugin_dir_path(__FILE__) . 'includes/module-assets.php';
 
-function scf_enqueue_scripts() {
-    // 郵便番号→住所自動入力API（yubinbango.js）
-    wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
-    // 独自バリデーション用
-    wp_enqueue_script('scf-validate', plugins_url('validate.js', __FILE__), ['jquery'], '1.0', true);
-    wp_enqueue_style('scf-style', plugins_url('style.css', __FILE__));
-    // Cloudflare Turnstile
-    if ( get_option('scf_turnstile_enabled', 0) ) {
-        wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
-    }
-    // 会員登録用パスワードリアルタイムチェック（常時読み込みでも軽量）
-    $reg_js_path = plugin_dir_path(__FILE__) . 'register.js';
-    $reg_ver = file_exists($reg_js_path) ? filemtime($reg_js_path) : '1.0.1';
-    wp_enqueue_script('scf-register', plugins_url('register.js', __FILE__), ['jquery'], $reg_ver, true);
-    // WordPress 同梱の zxcvbn を利用（ハンドル: zxcvbn-async または zxcvbn）
-    if ( ! wp_script_is('zxcvbn-async','registered') && ! wp_script_is('zxcvbn','registered') ) {
-        // フォールバックCDN（理想は WP 同梱利用だが環境差異考慮）
-        wp_register_script('zxcvbn', 'https://cdnjs.cloudflare.com/ajax/libs/zxcvbn/4.4.2/zxcvbn.js', [], '4.4.2', true);
-    }
-    // 既存のコアハンドルがあればそれをenqueue、なければフォールバック
-    if ( wp_script_is('zxcvbn-async','registered') ) {
-        wp_enqueue_script('zxcvbn-async');
-    } elseif ( wp_script_is('zxcvbn','registered') ) {
-        wp_enqueue_script('zxcvbn');
-    } else {
-        wp_enqueue_script('zxcvbn');
-    }
-}
-add_action('wp_enqueue_scripts', 'scf_enqueue_scripts');
+// フロントのアセット読み込みは includes/module-assets.php に移管しました。
 
 function scf_render_form($atts = []) {
     ob_start();
@@ -182,14 +155,6 @@ register_activation_hook(__FILE__, function() {
     dbDelta($sql);
 });
 
-// テーブル作成・アップグレード関数は includes/module-inquiries.php に移管しました。
-
-/**
- * Simple spam check. Returns array: [is_spam(bool), engine(string), note(string)].
- * - By default performs keyword check in PHP.
- * - If option 'scf_use_python_spam' is true and 'scf_python_path' is set, it will attempt to call Python script and prefer its result.
- */
-
 // お問い合わせ管理メニュー追加
 add_action('admin_menu', function() {
     add_menu_page(
@@ -231,7 +196,6 @@ add_action('admin_menu', function() {
         }
     );
 });
-// 管理画面の実装は includes/admin-inquiries.php, includes/admin-settings.php に移管しました。
 
 // ファイル保持期間に応じて添付ファイルを自動削除
 add_action('scf_delete_old_attachments', function() {
@@ -254,19 +218,4 @@ if (!wp_next_scheduled('scf_delete_old_attachments')) {
     wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
 }
 
-// ファイルアップロード用JSを追加
-add_action('wp_enqueue_scripts', function() {
-    wp_enqueue_script('scf-file-upload', plugins_url('file-upload.js', __FILE__), ['jquery'], '1.0', true);
-    wp_enqueue_style('scf-file-thumb', plugins_url('file-thumb.css', __FILE__));
-});
-
-// Ajax送信処理は includes/module-ajax.php へ移管しました。
-
-// 認証/登録/ソーシャル連携関連は includes/module-auth.php へ移管しました。
-
-// ML retrain スケジュールとハンドラは includes/module-ml.php へ移管しました。
-
-
-/**
- * spam_listテーブルのスキーマ自動アップグレード（createdカラム追加）
- */
+// フォーム専用のアセット読み込みは includes/module-assets.php に移管しました。
