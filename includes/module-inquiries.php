@@ -4,6 +4,7 @@ if (!defined('ABSPATH')) exit;
 /**
  * お問い合わせテーブル作成・アップグレード
  */
+if (!function_exists('scf_create_table')) {
 function scf_create_table() {
     global $wpdb;
     $table = $wpdb->prefix . 'scf_inquiries';
@@ -33,7 +34,9 @@ function scf_create_table() {
         dbDelta($sql);
     }
 }
+}
 
+if (!function_exists('scf_upgrade_table_schema')) {
 function scf_upgrade_table_schema(){
     global $wpdb; $table = $wpdb->prefix.'scf_inquiries';
     if( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) return;
@@ -53,10 +56,17 @@ function scf_upgrade_table_schema(){
         if( defined('WP_DEBUG') && WP_DEBUG ) error_log('[scf] schema upgraded: '.$sql.' error='.$wpdb->last_error);
     }
 }
+}
 
+if (!function_exists('scf_ensure_inquiries_table_schema')) {
 function scf_ensure_inquiries_table_schema(){
     if ( defined('WP_INSTALLING') && WP_INSTALLING ) return;
     scf_create_table();
     scf_upgrade_table_schema();
 }
-add_action('init','scf_ensure_inquiries_table_schema',1);
+}
+
+// 二重登録防止のため、既に同一コールバックが登録されていない場合のみ追加
+if ( ! has_action('init', 'scf_ensure_inquiries_table_schema') ) {
+    add_action('init','scf_ensure_inquiries_table_schema',1);
+}
