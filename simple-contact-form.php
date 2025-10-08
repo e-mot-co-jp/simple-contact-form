@@ -16,27 +16,9 @@ Update URI: https://e-mot.co.jp/
 */
 
 if (!defined('ABSPATH')) exit;
+// モジュール読み込み
+require_once plugin_dir_path(__FILE__) . 'includes/module-spam.php';
 
-/**
- * spam_listテーブルの自動作成（id, inquiry_id, class, message, created）
- */
-function scf_create_spam_list_table() {
-    global $wpdb;
-    $table = 'spam_list';
-    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) {
-        $charset_collate = $wpdb->get_charset_collate();
-        $sql = "CREATE TABLE $table (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-            inquiry_id BIGINT UNSIGNED,
-            class VARCHAR(16) DEFAULT 'ham',
-            message TEXT,
-            created DATETIME DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id)
-        ) $charset_collate;";
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-    }
-}
 function scf_enqueue_scripts() {
     // 郵便番号→住所自動入力API（yubinbango.js）
     wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
@@ -267,124 +249,6 @@ add_action('init','scf_ensure_inquiries_table_schema',1);
  * - By default performs keyword check in PHP.
  * - If option 'scf_use_python_spam' is true and 'scf_python_path' is set, it will attempt to call Python script and prefer its result.
  */
-function scf_check_spam($text) {
-    $text = mb_strtolower(trim($text));
-    // default keyword list (Japanese sales-related words)
-    $keywords = [
-        '営業', '販売', 'セール', 'セールス', '見積', 'ご提案', 'ご案内', '促進', '勧誘', '販促', 'お問い合わせ（営業）'
-    ];
-    foreach ($keywords as $kw) {
-        if (mb_strpos($text, mb_strtolower($kw)) !== false) {
-            return [true, 'keyword', 'matched: ' . $kw];
-        }
-    }
-
-    // try python classifier if enabled (user selected). Resolve ~ and try to locate executable.
-    if ( get_option('scf_use_python_spam', false) ) {
-        $py_path = trim(get_option('scf_python_path', 'python3'));
-        $script = plugin_dir_path(__FILE__) . 'sales_block.py';
-
-        // expand ~ to home
-        if ($py_path !== '' && strpos($py_path, '~') === 0) {
-            $home = getenv('HOME');
-            if (!$home && !empty($_SERVER['HOME'])) $home = $_SERVER['HOME'];
-            if ($home) {
-                $py_path = $home . substr($py_path, 1);
-            }
-        }
-
-        $resolved = '';
-        if ($py_path === '') {
-            $resolved = '';
-        } elseif (strpos($py_path, '/') === false) {
-            // command name like 'python3' — try which
-            $which = trim(@shell_exec('which ' . escapeshellarg($py_path) . ' 2>/dev/null'));
-            if ($which) $resolved = $which;
-        } else {
-            // path provided
-            if (is_executable($py_path)) {
-                $resolved = $py_path;
-            } elseif (file_exists($py_path)) {
-                // try to use it even if not marked executable
-                $resolved = $py_path;
-            }
-        }
-
-        if ($resolved) {
-            $cmd = escapeshellcmd($resolved) . ' ' . escapeshellarg($script);
-            $descriptors = [
-                0 => ['pipe', 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ];
-            $proc = @proc_open($cmd, $descriptors, $pipes);
-            if (is_resource($proc)) {
-                // write text to stdin
-                fwrite($pipes[0], $text . "\n");
-                fclose($pipes[0]);
-                // non-blocking read with timeout
-                stream_set_blocking($pipes[1], false);
-                stream_set_blocking($pipes[2], false);
-                $output = '';
-                $errout = '';
-                $start = microtime(true);
-                $timeout = 3.0; // seconds
-                // loop until process exits or timeout
-                while (true) {
-                    $read = [$pipes[1], $pipes[2]];
-                    $write = null;
-                    $except = null;
-                    // wait up to 0.2s
-                    $num = @stream_select($read, $write, $except, 0, 200000);
-                    if ($num === false) break;
-                    if ($num > 0) {
-                        foreach ($read as $r) {
-                            $buf = stream_get_contents($r);
-                            if ($r === $pipes[1]) $output .= $buf;
-                            else $errout .= $buf;
-                        }
-                    }
-                    $status = proc_get_status($proc);
-                    if (!$status['running']) break;
-                    if ((microtime(true) - $start) > $timeout) {
-                        // timeout: terminate process
-                        @proc_terminate($proc);
-                        break;
-                    }
-                    usleep(100000); // 0.1s
-                }
-                // read any remaining
-                $output .= stream_get_contents($pipes[1]);
-                $errout .= stream_get_contents($pipes[2]);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                $code = proc_close($proc);
-                $out = trim($output);
-                $err = trim($errout);
-                if ($out === 'spam') {
-                    return [true, 'python', 'python:spam'];
-                } elseif ($out === 'ham') {
-                    return [false, 'python', 'python:ham'];
-                } else {
-                    // unexpected output or timeout — fallthrough to keyword result
-                    if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                        error_log('[scf] python classifier unexpected output: ' . substr($out,0,200) . ' err:' . substr($err,0,200));
-                    }
-                }
-            } else {
-                if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                    error_log('[scf] proc_open failed for command: ' . $cmd);
-                }
-            }
-        } else {
-            if ( defined('WP_DEBUG') && WP_DEBUG ) {
-                error_log('[scf] python path could not be resolved: ' . $py_path);
-            }
-        }
-    }
-
-    return [false, 'none', 'no match'];
-}
 
 // お問い合わせ管理メニュー追加
 add_action('admin_menu', function() {
@@ -422,7 +286,7 @@ add_action('admin_menu', function() {
         'manage_options',
         'scf_spam_list',
         function() {
-            require_once plugin_dir_path(__FILE__) . 'admin-spam-list.php';
+            require_once plugin_dir_path(__FILE__) . 'includes/admin-spam-list.php';
             scf_admin_spam_list_page();
         }
     );
@@ -1719,19 +1583,3 @@ add_action( 'scf_ml_retrain_event', function() {
 /**
  * spam_listテーブルのスキーマ自動アップグレード（createdカラム追加）
  */
-function scf_upgrade_spam_list_schema() {
-    global $wpdb;
-    $table = 'spam_list';
-    if ( $wpdb->get_var("SHOW TABLES LIKE '$table'") != $table ) return;
-    $cols = $wpdb->get_results("DESCRIBE $table");
-    if( ! $cols ) return;
-    $have = [];
-    foreach($cols as $c){ $have[$c->Field] = true; }
-    $alters = [];
-    if( empty($have['created']) ) $alters[] = 'ADD created DATETIME DEFAULT CURRENT_TIMESTAMP AFTER message';
-    if( $alters ){
-        $sql = 'ALTER TABLE '.$table.' '.implode(', ', $alters);
-        $wpdb->query($sql);
-        if( defined('WP_DEBUG') && WP_DEBUG ) error_log('[scf] spam_list schema upgraded: '.$sql.' error='.$wpdb->last_error);
-    }
-}
