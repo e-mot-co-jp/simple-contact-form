@@ -3,7 +3,7 @@
 Plugin Name: Simple Contact Form
 Plugin URI: https://e-mot.co.jp/
 Description: シンプルなお問い合わせフォーム（ファイル添付・郵便番号→住所自動入力(yubinbango)対応）
-Version: 1.1.0
+Version: 1.2.0
 Author: Yu Ishiga
 Author URI: https://backcountry-works.com/
 Text Domain: simple-contact-form
@@ -27,7 +27,6 @@ require_once plugin_dir_path(__FILE__) . 'includes/module-ml.php';
 require_once plugin_dir_path(__FILE__) . 'includes/module-assets.php';
 require_once plugin_dir_path(__FILE__) . 'includes/module-frontend.php';
 
-// フロントのショートコードは includes/module-frontend.php に移管しました。
 // お問い合わせデータ保存用テーブル作成
 register_activation_hook(__FILE__, function() {
     global $wpdb;
@@ -119,5 +118,3 @@ add_action('scf_delete_old_attachments', function() {
 if (!wp_next_scheduled('scf_delete_old_attachments')) {
     wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
 }
-
-// フォーム専用のアセット読み込みは includes/module-assets.php に移管しました。
