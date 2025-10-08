@@ -18,6 +18,7 @@ Update URI: https://e-mot.co.jp/
 if (!defined('ABSPATH')) exit;
 // モジュール読み込み
 require_once plugin_dir_path(__FILE__) . 'includes/module-spam.php';
+require_once plugin_dir_path(__FILE__) . 'includes/module-inquiries.php';
 
 function scf_enqueue_scripts() {
     // 郵便番号→住所自動入力API（yubinbango.js）
@@ -544,91 +545,26 @@ function scf_admin_inquiry_list_page() {
     }
 }
 
-function scf_admin_inquiry_view_page() {
-    if ( empty($_GET['inquiry_id']) ) {
-        echo '<div class="wrap"><p>無効な問い合わせIDです。</p></div>';
-        return;
-    }
-    $id = intval($_GET['inquiry_id']);
-    global $wpdb;
-    $table = $wpdb->prefix . 'scf_inquiries';
-    $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id));
-    if ( ! $row ) {
-        echo '<div class="wrap"><p>該当するお問い合わせが見つかりません。</p></div>';
-        return;
-    }
-    echo '<div class="wrap">';
-    echo '<h1>お問い合わせ詳細 — ' . esc_html($row->inquiry_no) . '</h1>';
-    echo '<p><a href="' . esc_url(admin_url('admin.php?page=scf_inquiry_list')) . '">&laquo; 一覧に戻る</a></p>';
-    echo '<table class="form-table">';
-    $fields = [
-        '日時' => $row->created,
-        '番号' => $row->inquiry_no,
-        'お名前' => $row->name,
-        'メール' => '<a href="mailto:' . esc_attr($row->email) . '">' . esc_html($row->email) . '</a>',
-        '郵便番号' => $row->zip,
-        '住所' => $row->address,
-        '電話番号' => $row->tel,
-        '種別' => $row->inquiry,
-        '商品名' => $row->product,
-        'お買い上げ日' => $row->date,
-        'ご購入店舗' => $row->shop,
-        '内容' => nl2br(esc_html($row->content)),
-    ];
-    foreach ($fields as $k => $v) {
-        echo '<tr><th style="width:18%;text-align:left;">' . esc_html($k) . '</th><td>' . $v . '</td></tr>';
-    }
-    // spam 情報
-    echo '<tr><th style="text-align:left;">判定</th><td>' . (isset($row->is_spam) && $row->is_spam ? '<strong style="color:#d9534f;">SPAM</strong>' : '<strong style="color:#5cb85c;">OK</strong>') . '</td></tr>';
-    if (!empty($row->spam_engine) || !empty($row->spam_note)) {
-        echo '<tr><th style="text-align:left;">判定エンジン / メモ</th><td>' . esc_html($row->spam_engine) . ' / ' . esc_html($row->spam_note) . '</td></tr>';
-    }
-    echo '</table>';
-    // attachments
-    $files = $row->files ? maybe_unserialize($row->files) : [];
-    if ($files && is_array($files)) {
-        echo '<h2>添付ファイル</h2><div>';
-        foreach ($files as $f) {
-            if (strpos($f['mime'], 'image/') === 0) {
-                echo '<a href="' . esc_url($f['url']) . '" target="_blank"><img src="' . esc_url($f['thumb']) . '" style="max-width:200px;margin:6px;border:1px solid #ddd;padding:4px;background:#fff;"></a>';
-            } else {
-                echo '<p><a href="' . esc_url($f['url']) . '" target="_blank">' . esc_html($f['name']) . '</a></p>';
-            }
-        }
-        echo '</div>';
-    }
-    echo '</div>';
-}
 // ファイル保持期間に応じて添付ファイルを自動削除
 add_action('scf_delete_old_attachments', function() {
     $period = intval(get_option('scf_file_period', 365));
     $before = $period > 0 ? $period . ' days ago' : '365 days ago';
     $args = [
-        'post_type' => 'attachment',
-        'post_status' => 'inherit',
+        'post_type'      => 'attachment',
+        'post_status'    => 'inherit',
         'posts_per_page' => -1,
-        'date_query' => [
-            [
-                'before' => $before,
-                'column' => 'post_date_gmt',
-            ],
-        ],
-        'meta_query' => [
-            [
-                'key' => '_scf_uploaded',
-                'value' => '1',
-            ],
-        ],
-        'fields' => 'ids',
+        'date_query'     => [ [ 'before' => $before, 'column' => 'post_date_gmt' ] ],
+        'meta_query'     => [ [ 'key' => '_scf_uploaded', 'value' => '1' ] ],
+        'fields'         => 'ids',
     ];
     $attachments = get_posts($args);
     foreach ($attachments as $att_id) {
         wp_delete_attachment($att_id, true);
     }
-    });
-    if (!wp_next_scheduled('scf_delete_old_attachments')) {
-        wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
-    }
+});
+if (!wp_next_scheduled('scf_delete_old_attachments')) {
+    wp_schedule_event(time(), 'daily', 'scf_delete_old_attachments');
+}
 
 // ファイルアップロード用JSを追加
 add_action('wp_enqueue_scripts', function() {
