@@ -5,7 +5,8 @@
 ## 特徴
 - ファイル添付（複数可・40MBまで・jpg/jpeg/gif/pdf/heic/png）
 - 郵便番号→住所自動入力（yubinbango.js）
-- Cloudflare Turnstile対応
+- Cloudflare Turnstile対応（※利用には「Simple Cloudflare Turnstile」等の外部プラグインが必要です）
+- ソーシャルログイン連携（※利用には「Nextend Social Login」等の外部プラグインが必要です）
 - 入力内容確認画面・送信完了画面
 - プライバシーポリシー同意チェック
 
@@ -23,4 +24,4 @@
 GPLv2 or later
 
 ## 作者
-[e-mot](https://e-mot.co.jp/)
+[yu ishiga](https://backcountry-works.com/)

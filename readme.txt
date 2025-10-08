@@ -1,5 +1,5 @@
 === Simple Contact Form ===
-Contributors: e-mot
+Contributors: yu ishiga
 Tags: contact, form, file upload, yubinbango, address auto-fill
 Requires at least: 5.0
 Tested up to: 6.4

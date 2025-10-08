@@ -5,8 +5,8 @@ Plugin Name: Simple Contact Form
 Plugin URI: https://e-mot.co.jp/
 Description: シンプルなお問い合わせフォーム（ファイル添付・郵便番号→住所自動入力(yubinbango)対応）
 Version: 1.0.0
-Author: e-mot
-Author URI: https://e-mot.co.jp/
+Author: Yu Ishiga
+Author URI: https://backcountry-works.com/
 Text Domain: simple-contact-form
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
