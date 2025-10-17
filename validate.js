@@ -132,7 +132,9 @@ jQuery(function($){
           // フォーム初期化
           $form[0].reset();
           $('.scf-file-list').empty();
-          showModal('送信が完了しました。<br>お問い合わせ番号: ' + (res.data && res.data.message ? '' : ''), false); // 詳細メッセージはcomplete画面に表示済み
+          const inquiryId = (res.data && res.data.inquiry_id) ? res.data.inquiry_id : '';
+          const modalMsg = inquiryId ? '送信が完了しました。<br>お問い合わせ番号: ' + inquiryId : '送信が完了しました。';
+          showModal(modalMsg, false);
         } else {
           phase = 'confirm';
           const err = res && res.data && res.data.message ? res.data.message : '送信に失敗しました。';
@@ -155,7 +157,7 @@ jQuery(function($){
   const $modalBody = $modal.find('.scf-modal-body');
   function showModal(html, isError){
     $modalBody.html('<div class="'+(isError?'scf-modal-error':'scf-modal-info')+'">'+html+'</div>');
-    $modal.fadeIn(120);
+    $modal.css('display', 'flex').hide().fadeIn(120);
   }
   function closeModal(){
     $modal.fadeOut(120);
