@@ -132,7 +132,6 @@ jQuery(function($){
           // フォーム初期化
           $form[0].reset();
           $('.scf-file-list').empty();
-          showModal('送信が完了しました。', false);
         } else {
           phase = 'confirm';
           const err = res && res.data && res.data.message ? res.data.message : '送信に失敗しました。';
