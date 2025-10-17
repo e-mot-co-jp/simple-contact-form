@@ -132,9 +132,7 @@ jQuery(function($){
           // フォーム初期化
           $form[0].reset();
           $('.scf-file-list').empty();
-          const inquiryId = (res.data && res.data.inquiry_id) ? res.data.inquiry_id : '';
-          const modalMsg = inquiryId ? '送信が完了しました。<br>お問い合わせ番号: ' + inquiryId : '送信が完了しました。';
-          showModal(modalMsg, false);
+          showModal('送信が完了しました。', false);
         } else {
           phase = 'confirm';
           const err = res && res.data && res.data.message ? res.data.message : '送信に失敗しました。';
