@@ -162,4 +162,7 @@ jQuery(function($){
   $modal.on('click','.scf-modal-close', closeModal);
   $modal.on('click','.scf-modal-overlay', closeModal);
   $(document).on('keydown', function(e){ if(e.key==='Escape' && $modal.is(':visible')) closeModal(); });
+  
+  // デバッグ用: ファイル読み込み確認
+  console.log('SCF validate.js loaded - version: 2025-10-17-fix');
 });

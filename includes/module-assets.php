@@ -7,9 +7,14 @@ function scf_enqueue_scripts() {
     $plugin_main = dirname(__FILE__) . '/../simple-contact-form.php';
     // 郵便番号→住所自動入力API（yubinbango.js）
     wp_enqueue_script('yubinbango', 'https://yubinbango.github.io/yubinbango/yubinbango.js', [], null, true);
-    // 独自バリデーション用
-    wp_enqueue_script('scf-validate', plugins_url('validate.js', $plugin_main), ['jquery'], '1.0', true);
-    wp_enqueue_style('scf-style', plugins_url('style.css', $plugin_main));
+    // 独自バリデーション用（ファイル更新時刻をバージョンに使用してキャッシュ回避）
+    $validate_js_path = plugin_dir_path($plugin_main) . 'validate.js';
+    $validate_ver = file_exists($validate_js_path) ? filemtime($validate_js_path) : '1.0';
+    wp_enqueue_script('scf-validate', plugins_url('validate.js', $plugin_main), ['jquery'], $validate_ver, true);
+    // スタイルもファイル更新時刻をバージョンに使用
+    $style_css_path = plugin_dir_path($plugin_main) . 'style.css';
+    $style_ver = file_exists($style_css_path) ? filemtime($style_css_path) : '1.0';
+    wp_enqueue_style('scf-style', plugins_url('style.css', $plugin_main), [], $style_ver);
     // Cloudflare Turnstile
     if ( get_option('scf_turnstile_enabled', 0) ) {
         wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
