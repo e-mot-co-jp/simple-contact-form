@@ -88,7 +88,7 @@ function scf_login_form_shortcode($atts) {
                 if(btn) btn.disabled = true;
             }
         });
-        window.scfLoginTurnstileSuccess = function(){
+        window.turnstileWPCallback = function(){
             var form = document.querySelector('form.login');
             if(form){
                 var btn = form.querySelector('input[type="submit"], button[type="submit"]');
