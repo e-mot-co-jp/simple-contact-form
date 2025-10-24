@@ -76,6 +76,29 @@ function scf_login_form_shortcode($atts) {
     if ($failed) { echo '<div class="scf-login-errors"><p class="scf-error" style="color:#b32d2e;">' . esc_html__('ユーザー名またはパスワードが正しくありません。', 'simple-contact-form') . '</p></div>'; }
     wp_login_form($args);
     remove_filter('login_form_middle', $hidden_cb, 10);
+    // Turnstile有効時のみスクリプト追加
+    $sitekey = scf_get_turnstile_sitekey();
+    if ($sitekey) {
+        ?>
+        <div class="cf-turnstile" data-sitekey="<?php echo esc_attr($sitekey); ?>" data-callback="scfLoginTurnstileSuccess"></div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.querySelector('form.login');
+            if(form){
+                var btn = form.querySelector('input[type="submit"], button[type="submit"]');
+                if(btn) btn.disabled = true;
+            }
+        });
+        window.scfLoginTurnstileSuccess = function(){
+            var form = document.querySelector('form.login');
+            if(form){
+                var btn = form.querySelector('input[type="submit"], button[type="submit"]');
+                if(btn) btn.disabled = false;
+            }
+        };
+        </script>
+        <?php
+    }
     return ob_get_clean();
 }
 add_shortcode('scf_login_form', 'scf_login_form_shortcode');
