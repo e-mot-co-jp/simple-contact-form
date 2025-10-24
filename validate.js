@@ -84,6 +84,8 @@ jQuery(function($){
     $confirm.show();
     $complete.hide();
     $message.text('').removeAttr('style');
+    // 確認画面表示時にページトップへスクロール
+    window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
   function switchToInput(){
@@ -180,5 +182,5 @@ jQuery(function($){
   $(document).on('keydown', function(e){ if(e.key==='Escape' && $modal.is(':visible')) closeModal(); });
   
   // デバッグ用: ファイル読み込み確認
-  console.log('SCF validate.js loaded - version: 2025-10-17-fix');
+  console.log('SCF validate.js loaded - version: 2025-10-24-scroll-fix');
 });
