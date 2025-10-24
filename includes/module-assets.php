@@ -18,6 +18,13 @@ function scf_enqueue_scripts() {
     // Cloudflare Turnstile
     if ( get_option('scf_turnstile_enabled', 0) ) {
         wp_enqueue_script('cf-turnstile', 'https://challenges.cloudflare.com/turnstile/v0/api.js', [], null, true);
+        // ロケットローダーから除外するためのフィルター追加
+        add_filter('script_loader_tag', function($tag, $handle) {
+            if ($handle === 'cf-turnstile') {
+                return str_replace('<script', '<script data-cfasync="false"', $tag);
+            }
+            return $tag;
+        }, 10, 2);
     }
     // 会員登録用パスワードリアルタイムチェック（常時読み込みでも軽量）
     $reg_js_path = plugin_dir_path($plugin_main) . 'register.js';

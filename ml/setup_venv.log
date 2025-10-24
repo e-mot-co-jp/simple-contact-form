@@ -1,0 +1,6 @@
+Setting up venv in /home/xs683807/e-mot.co.jp/public_html/dev/wp-content/plugins/simple-contact-form/ml/.venv
+Venv already exists at /home/xs683807/e-mot.co.jp/public_html/dev/wp-content/plugins/simple-contact-form/ml/.venv
+Installing from /home/xs683807/e-mot.co.jp/public_html/dev/wp-content/plugins/simple-contact-form/ml/requirements.txt
+Venv setup complete. To use it:
+  source /home/xs683807/e-mot.co.jp/public_html/dev/wp-content/plugins/simple-contact-form/ml/.venv/bin/activate
+Then run training with: python ml/train_tfidf_lr.py --input ml/spam_list.csv --output ml/model.joblib
