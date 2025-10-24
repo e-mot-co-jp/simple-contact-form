@@ -182,5 +182,5 @@ jQuery(function($){
   $(document).on('keydown', function(e){ if(e.key==='Escape' && $modal.is(':visible')) closeModal(); });
   
   // デバッグ用: ファイル読み込み確認
-  console.log('SCF validate.js loaded - version: 2025-10-24-scroll-fix');
+  console.log('SCF validate.js loaded - version: 2025-10-24-scroll--fix');
 });
