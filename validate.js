@@ -132,7 +132,7 @@ jQuery(function($){
     // Turnstile token デバッグ
     const tokenInput = document.getElementById('cf_turnstile_token');
     if (tokenInput) {
-      console.log('Turnstile token value:', tokenInput.value);
+      //console.log('Turnstile token value:', tokenInput.value);
       if (!tokenInput.value) {
         console.warn('Turnstile token is empty!');
       }
