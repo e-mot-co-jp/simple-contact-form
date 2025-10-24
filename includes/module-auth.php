@@ -92,7 +92,11 @@ function scf_login_form_shortcode($atts) {
             var form = document.querySelector('form.login');
             if(form){
                 var btn = form.querySelector('input[type="submit"], button[type="submit"]');
-                if(btn) btn.disabled = false;
+                if(btn) {
+                    btn.disabled = false;
+                    btn.style.pointerEvents = '';
+                    btn.style.opacity = '';
+                }
             }
         };
         </script>
