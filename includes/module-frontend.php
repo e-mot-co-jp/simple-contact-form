@@ -61,10 +61,17 @@ function scf_render_form($atts = []) {
         ?>
             <div class="cf-turnstile" data-sitekey="<?php echo $sitekey; ?>" data-theme="light" data-callback="__scf_turnstile_callback"></div>
             <input type="hidden" name="cf_turnstile_token" id="cf_turnstile_token" value="">
-            <script>
+            <script data-cfasync="false">
+            // Turnstile コールバック（ロケットローダー回避のため data-cfasync="false" 付与）
             window.__scf_turnstile_callback = function(token) {
+                console.log('Turnstile callback fired, token:', token ? token.substring(0, 20) + '...' : 'empty');
                 var el = document.getElementById('cf_turnstile_token');
-                if (el) el.value = token;
+                if (el) {
+                    el.value = token;
+                    console.log('Token set to hidden input');
+                } else {
+                    console.error('cf_turnstile_token element not found');
+                }
             };
             </script>
         <?php endif; ?>

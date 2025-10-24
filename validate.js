@@ -32,6 +32,14 @@ jQuery(function($){
         msg += label + 'は必須です。\n';
       }
     });
+    // Turnstile検証
+    const turnstileDiv = document.querySelector('.cf-turnstile');
+    if (turnstileDiv) {
+      const tokenInput = document.getElementById('cf_turnstile_token');
+      if (!tokenInput || !tokenInput.value) {
+        msg += 'セキュリティ認証（Turnstile）を完了してください。\n';
+      }
+    }
     if(msg){
       showModal(msg.replace(/\n/g,'<br>'), true);
       return false;
@@ -119,6 +127,14 @@ jQuery(function($){
     $message.text('');
     const formData = new FormData($form[0]);
     formData.append('scf_ajax','1');
+    // Turnstile token デバッグ
+    const tokenInput = document.getElementById('cf_turnstile_token');
+    if (tokenInput) {
+      console.log('Turnstile token value:', tokenInput.value);
+      if (!tokenInput.value) {
+        console.warn('Turnstile token is empty!');
+      }
+    }
     $.ajax({
       url: location.href,
       type: 'POST',
