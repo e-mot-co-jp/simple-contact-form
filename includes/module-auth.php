@@ -94,8 +94,8 @@ function scf_login_form_shortcode($atts) {
                 var btn = form.querySelector('input[type="submit"], button[type="submit"]');
                 if(btn) {
                     btn.disabled = false;
-                    btn.style.pointerEvents = '';
-                    btn.style.opacity = '';
+                    btn.style.setProperty('pointer-events', 'auto', 'important');
+                    btn.style.setProperty('opacity', '1', 'important');
                 }
             }
         };
