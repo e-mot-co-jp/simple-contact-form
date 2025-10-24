@@ -1,1 +1,7 @@
 ml/.venv/
+ml/model.joblib
+ml/setup_venv.log
+ml/spam_list.csv
+ml/spam_list.csv.bak
+ml/spam_list.withheader.csv
+model.joblib
